@@ -53,12 +53,7 @@ export interface ApiResponse<T> {
   success: boolean;
   data: T;
   error?: { code: string; message: string };
-  meta?: {
-    page: number;
-    per_page: number;
-    total: number;
-    total_pages: number;
-  };
+  meta?: PaginationMeta;
 }
 
 export interface PostsResponse {
@@ -94,7 +89,7 @@ export interface PostFormData {
   title: string;
   slug: string;
   summary: string;
-  content: string;
+  content: string; // raw markdown for the editor
   section_id: string;
   status: "draft" | "published" | "archived";
   is_featured: boolean;
@@ -110,13 +105,13 @@ export interface OverviewStats {
   period: string;
   total_page_views: number;
   unique_visitors: number;
-  avg_scroll_pct: number;
-  avg_read_time_sec: number;
-  top_posts: PostStat[];
-  top_referrers: ReferrerStat[];
-  device_breakdown: DeviceStat[];
-  country_breakdown: CountryStat[];
-  daily_views: DailyStat[];
+  avg_scroll_pct: number | null;
+  avg_read_time_sec: number | null;
+  top_posts: PostStat[] | null;
+  top_referrers: ReferrerStat[] | null;
+  device_breakdown: DeviceStat[] | null;
+  country_breakdown: CountryStat[] | null;
+  daily_views: DailyStat[] | null;
 }
 
 export interface PostStat {

@@ -8,10 +8,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const router = useRouter();
 
     useEffect(() => {
-        if (!loading && !user) router.replace("/admin/login");
+        if (!loading && !user) {
+            router.replace("/admin/login");
+        }
     }, [user, loading, router]);
 
-    if (loading) {
+    if (loading || !user) {
         return (
             <div className="min-h-dvh flex items-center justify-center bg-[hsl(var(--background))]">
                 <div className="flex flex-col items-center gap-3">
@@ -22,6 +24,5 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         );
     }
 
-    if (!user) return null;
     return <>{children}</>;
 }
