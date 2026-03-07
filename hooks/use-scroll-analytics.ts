@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { trackEvent, } from "@/lib/api";
+import { trackEvent } from "@/lib/api";
 import { getOrCreateSessionId } from "@/lib/utils";
 
 export function useScrollAnalytics(postId?: string) {
@@ -16,12 +16,10 @@ export function useScrollAnalytics(postId?: string) {
       const docHeight = document.documentElement.scrollHeight - window.innerHeight;
       const pct = docHeight > 0 ? Math.round((scrollTop / docHeight) * 100) : 0;
 
-      // Track at 25%, 50%, 75%, 100%
       [25, 50, 75, 100].forEach((milestone) => {
         if (pct >= milestone && !milestones.current.has(milestone)) {
           milestones.current.add(milestone);
           trackEvent({ type: "scroll_depth", session_id: sessionId, post_id: postId, path, scroll_pct: milestone });
-
           if (milestone === 100) {
             trackEvent({ type: "read_complete", session_id: sessionId, post_id: postId, path });
           }
@@ -34,7 +32,6 @@ export function useScrollAnalytics(postId?: string) {
       trackEvent({ type: "session_end", session_id: sessionId, post_id: postId, path, duration_ms: duration });
     };
 
-    // Track page view immediately
     trackEvent({ type: postId ? "post_view" : "page_view", session_id: sessionId, post_id: postId, path, referrer: document.referrer });
 
     window.addEventListener("scroll", handleScroll, { passive: true });

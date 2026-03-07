@@ -1,3 +1,5 @@
+// ── Public types ──────────────────────────────────────────────────────────────
+
 export interface Post {
   id: string;
   title: string;
@@ -51,10 +53,100 @@ export interface ApiResponse<T> {
   success: boolean;
   data: T;
   error?: { code: string; message: string };
-  meta?: PaginationMeta;
+  meta?: {
+    page: number;
+    per_page: number;
+    total: number;
+    total_pages: number;
+  };
 }
 
 export interface PostsResponse {
   posts: Post[];
   meta: PaginationMeta;
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+
+export interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  avatar_url?: string;
+  role: "superadmin" | "admin" | "editor" | "viewer";
+  is_active: boolean;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  user: User;
+  access_token: string;
+  expires_in: number;
+}
+
+// ── Admin post form ───────────────────────────────────────────────────────────
+
+export interface PostFormData {
+  title: string;
+  slug: string;
+  summary: string;
+  content: string;
+  section_id: string;
+  status: "draft" | "published" | "archived";
+  is_featured: boolean;
+  cover_image: string;
+  cover_image_alt: string;
+  meta_title: string;
+  meta_desc: string;
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export interface OverviewStats {
+  period: string;
+  total_page_views: number;
+  unique_visitors: number;
+  avg_scroll_pct: number;
+  avg_read_time_sec: number;
+  top_posts: PostStat[];
+  top_referrers: ReferrerStat[];
+  device_breakdown: DeviceStat[];
+  country_breakdown: CountryStat[];
+  daily_views: DailyStat[];
+}
+
+export interface PostStat {
+  post_id: string;
+  post_title: string;
+  post_slug: string;
+  views: number;
+  unique_visitors: number;
+  avg_scroll_pct: number;
+}
+
+export interface ReferrerStat {
+  referrer: string;
+  count: number;
+}
+
+export interface DeviceStat {
+  device: string;
+  count: number;
+  pct: number;
+}
+
+export interface CountryStat {
+  country: string;
+  count: number;
+  pct: number;
+}
+
+export interface DailyStat {
+  date: string;
+  page_views: number;
+  unique_visitors: number;
 }
