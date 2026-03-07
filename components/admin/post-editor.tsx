@@ -6,7 +6,7 @@ import {
     Save, Eye, EyeOff, Globe, FileText, Archive,
     ChevronDown, AlertCircle, CheckCircle2, Loader2, Bell,
     Bold, Italic, Underline as UnderlineIcon, Heading1, Heading2, Heading3,
-    Heading4, List, ListOrdered, Quote, Code, Link as LinkIcon, Image as ImageIcon,
+    Heading4, List, ListOrdered, Quote, Code, Code2, Link as LinkIcon, Image as ImageIcon,
     Minus
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
@@ -20,6 +20,9 @@ function MarkdownPreview({ content }: { content: string }) {
     let inList = false;
     let listItems: string[] = [];
     let listType: "ul" | "ol" = "ul";
+    let inCodeBlock = false;
+    let codeBlockLines: string[] = [];
+    let codeBlockLang = "";
 
     const flushList = (index: number) => {
         if (inList && listItems.length > 0) {
@@ -36,16 +39,59 @@ function MarkdownPreview({ content }: { content: string }) {
         }
     };
 
+    const flushCodeBlock = (index: number) => {
+        if (inCodeBlock && codeBlockLines.length > 0) {
+            result.push(
+                <div key={`code-${index}`} className="my-4">
+                    {codeBlockLang && (
+                        <div className="text-[10px] font-mono text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] px-3 py-1 rounded-t border border-b-0 border-[hsl(var(--border))]">
+                            {codeBlockLang}
+                        </div>
+                    )}
+                    <pre className={cn(
+                        "bg-[hsl(var(--muted))] border border-[hsl(var(--border))] p-4 overflow-x-auto font-mono text-sm text-[hsl(var(--foreground))]",
+                        codeBlockLang ? "rounded-b" : "rounded"
+                    )}>
+                        <code className="text-[hsl(var(--foreground))]">{codeBlockLines.join("\n")}</code>
+                    </pre>
+                </div>
+            );
+            codeBlockLines = [];
+            codeBlockLang = "";
+            inCodeBlock = false;
+        }
+    };
+
     const formatInline = (text: string) => {
         return text
             .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
             .replace(/\*(.+?)\*/g, "<em>$1</em>")
             .replace(/__(.+?)__/g, "<u>$1</u>")
-            .replace(/`(.+?)`/g, "<code>$1</code>")
+            .replace(/`(.+?)`/g, '<code class="bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] px-1 py-0.5 rounded text-sm font-mono">$1</code>')
             .replace(/\[(.+?)]\((.+?)\)/g, '<a href="$2" class="text-[hsl(var(--accent))] hover:underline">$1</a>');
     };
 
     lines.forEach((line, i) => {
+        // Check for code block delimiters
+        if (line.startsWith("```")) {
+            if (inCodeBlock) {
+                // Closing code block
+                flushCodeBlock(i);
+            } else {
+                // Opening code block
+                flushList(i);
+                inCodeBlock = true;
+                codeBlockLang = line.slice(3).trim();
+            }
+            return;
+        }
+
+        // If inside code block, collect lines
+        if (inCodeBlock) {
+            codeBlockLines.push(line);
+            return;
+        }
+
         // Check for lists
         if (line.match(/^[-*]\s+(.+)/)) {
             const match = line.match(/^[-*]\s+(.+)/);
@@ -87,6 +133,7 @@ function MarkdownPreview({ content }: { content: string }) {
     });
 
     flushList(lines.length);
+    flushCodeBlock(lines.length);
 
     return <div className="prose-editorial max-w-none">{result}</div>;
 }
@@ -275,6 +322,39 @@ export function PostEditor({ post }: PostEditorProps) {
             insertAtCursor(ordered ? "1. " : "- ", 0);
         }
     }, [form.content, insertAtCursor]);
+
+    const insertCodeBlock = useCallback((language: string = "") => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selectedText = form.content.substring(start, end);
+        const beforeText = form.content.substring(0, start);
+        const afterText = form.content.substring(end);
+
+        if (selectedText) {
+            // Wrap selected text in code block
+            const codeBlock = `\`\`\`${language}\n${selectedText}\n\`\`\`\n`;
+            const newContent = beforeText + codeBlock + afterText;
+            setForm((f) => ({ ...f, content: newContent }));
+            setTimeout(() => {
+                textarea.focus();
+                const newPos = start + 3 + language.length + 1; // After ```language\n
+                textarea.setSelectionRange(newPos, newPos + selectedText.length);
+            }, 0);
+        } else {
+            // Insert empty code block
+            const codeBlock = `\`\`\`${language}\n\n\`\`\`\n`;
+            const newContent = beforeText + codeBlock + afterText;
+            setForm((f) => ({ ...f, content: newContent }));
+            setTimeout(() => {
+                textarea.focus();
+                const newPos = start + 3 + language.length + 1; // Position cursor inside code block
+                textarea.setSelectionRange(newPos, newPos);
+            }, 0);
+        }
+    }, [form.content]);
 
     const handleImagePaste = useCallback(async (e: ClipboardEvent) => {
         const items = e.clipboardData?.items;
@@ -541,6 +621,58 @@ export function PostEditor({ post }: PostEditorProps) {
                                                 className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
                                             <Code className="h-4 w-4" />
                                         </button>
+                                        <div className="relative group">
+                                            <button type="button" title="Code Block (```)"
+                                                    className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                                <Code2 className="h-4 w-4" />
+                                            </button>
+                                            <div className="absolute left-0 top-full mt-1 w-32 bg-[hsl(var(--popover))] border border-[hsl(var(--border))] rounded shadow-lg z-50 overflow-hidden opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
+                                                <button type="button" onClick={() => insertCodeBlock("")}
+                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                                    Plain
+                                                </button>
+                                                <button type="button" onClick={() => insertCodeBlock("javascript")}
+                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                                    JavaScript
+                                                </button>
+                                                <button type="button" onClick={() => insertCodeBlock("typescript")}
+                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                                    TypeScript
+                                                </button>
+                                                <button type="button" onClick={() => insertCodeBlock("python")}
+                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                                    Python
+                                                </button>
+                                                <button type="button" onClick={() => insertCodeBlock("go")}
+                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                                    Go
+                                                </button>
+                                                <button type="button" onClick={() => insertCodeBlock("rust")}
+                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                                    Rust
+                                                </button>
+                                                <button type="button" onClick={() => insertCodeBlock("bash")}
+                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                                    Bash
+                                                </button>
+                                                <button type="button" onClick={() => insertCodeBlock("sql")}
+                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                                    SQL
+                                                </button>
+                                                <button type="button" onClick={() => insertCodeBlock("json")}
+                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                                    JSON
+                                                </button>
+                                                <button type="button" onClick={() => insertCodeBlock("html")}
+                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                                    HTML
+                                                </button>
+                                                <button type="button" onClick={() => insertCodeBlock("css")}
+                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                                    CSS
+                                                </button>
+                                            </div>
+                                        </div>
                                         <button type="button" onClick={() => wrapSelection("[", "](url)")} title="Link (⌘K)"
                                                 className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
                                             <LinkIcon className="h-4 w-4" />
@@ -568,11 +700,11 @@ export function PostEditor({ post }: PostEditorProps) {
                                         <textarea ref={textareaRef}
                                                   value={form.content}
                                                   onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                                                  placeholder={"# Start writing...\n\nUse markdown:\n**bold** (⌘B), *italic* (⌘I), __underline__ (⌘U)\n`code` (⌘`), [link](url) (⌘K)\n\n- Bullet lists with - or *\n1. Numbered lists with 1.\n\n> Quotes with >\n\n---\n\nPaste images directly!"}
+                                                  placeholder={"# Start writing...\n\nUse markdown:\n**bold** (⌘B), *italic* (⌘I), __underline__ (⌘U)\n`code` (⌘`), [link](url) (⌘K)\n\n```language\ncode blocks\n```\n\n- Bullet lists with - or *\n1. Numbered lists with 1.\n\n> Quotes with >\n\n---\n\nPaste images directly!"}
                                                   rows={28} className="editor-textarea" spellCheck />
                                     </div>
                                     <p className="text-[10px] font-sans text-[hsl(var(--muted-foreground))] mt-2">
-                                        {form.content.split(/\s+/).filter(Boolean).length} words · ⌘S to save · Paste images to embed
+                                        {form.content.split(/\s+/).filter(Boolean).length} words · ⌘S to save · Paste images to embed · Use ``` for code blocks
                                     </p>
                                 </motion.div>
                             )}
