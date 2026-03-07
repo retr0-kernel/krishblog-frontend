@@ -6,6 +6,8 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
+// ── Core fetch ────────────────────────────────────────────────────────────────
+
 async function apiFetch<T>(
     path: string,
     init?: RequestInit & { token?: string }
@@ -93,11 +95,12 @@ export async function refreshToken(): Promise<LoginResponse> {
 
 // ── Admin posts ───────────────────────────────────────────────────────────────
 
-export async function adminGetPosts(token: string, params?: { page?: number; q?: string; status?: string }): Promise<{ posts: Post[]; meta: { page: number; per_page: number; total: number; total_pages: number } }> {
+export async function adminGetPosts(token: string, params?: { page?: number; q?: string; status?: string; per_page?: number }): Promise<{ posts: Post[]; meta: { page: number; per_page: number; total: number; total_pages: number } }> {
   const sp = new URLSearchParams();
   if (params?.page) sp.set("page", String(params.page));
   if (params?.q) sp.set("q", params.q);
   if (params?.status) sp.set("status", params.status);
+  if (params?.per_page) sp.set("per_page", String(params.per_page));
   try {
     const r = await apiFetch<Post[]>(`/v1/admin/posts?${sp}`, { token });
     return {
@@ -196,4 +199,15 @@ export async function trackEvent(payload: {
       keepalive: true,
     });
   } catch { /* best-effort */ }
+}
+
+// ── Subscribers ───────────────────────────────────────────────────────────────
+
+export async function adminGetSubscriberStats(token: string): Promise<{ total: number; confirmed: number }> {
+  try {
+    const r = await apiFetch<{ total: number; confirmed: number }>("/v1/admin/subscribers/stats", { token });
+    return r.data ?? { total: 0, confirmed: 0 };
+  } catch {
+    return { total: 0, confirmed: 0 };
+  }
 }
