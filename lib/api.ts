@@ -1,5 +1,5 @@
 import type {
-  ApiResponse, Post, PostsResponse, Section,
+  ApiResponse, Post, Section,
   LoginRequest, LoginResponse, User,
   OverviewStats, PostFormData,
 } from "@/types";
@@ -95,7 +95,10 @@ export async function refreshToken(): Promise<LoginResponse> {
 
 // ── Admin posts ───────────────────────────────────────────────────────────────
 
-export async function adminGetPosts(token: string, params?: { page?: number; q?: string; status?: string; per_page?: number }): Promise<{ posts: Post[]; meta: { page: number; per_page: number; total: number; total_pages: number } }> {
+export async function adminGetPosts(
+    token: string,
+    params?: { page?: number; q?: string; status?: string; per_page?: number }
+): Promise<{ posts: Post[]; meta: { page: number; per_page: number; total: number; total_pages: number } }> {
   const sp = new URLSearchParams();
   if (params?.page) sp.set("page", String(params.page));
   if (params?.q) sp.set("q", params.q);
@@ -135,6 +138,15 @@ export async function adminUpdatePost(token: string, id: string, body: Partial<P
   return r.data;
 }
 
+export async function adminUpdatePostStatus(token: string, id: string, status: string): Promise<Post> {
+  const r = await apiFetch<Post>(`/v1/admin/posts/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+    token,
+  });
+  return r.data;
+}
+
 export async function adminDeletePost(token: string, id: string): Promise<void> {
   await apiFetch(`/v1/admin/posts/${id}`, { method: "DELETE", token });
 }
@@ -142,8 +154,12 @@ export async function adminDeletePost(token: string, id: string): Promise<void> 
 // ── Admin sections ────────────────────────────────────────────────────────────
 
 export async function adminGetSections(token: string): Promise<Section[]> {
-  const r = await apiFetch<Section[]>("/v1/admin/sections", { token });
-  return r.data;
+  try {
+    const r = await apiFetch<Section[]>("/v1/admin/sections", { token });
+    return r.data ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export async function adminCreateSection(token: string, body: Partial<Section>): Promise<Section> {

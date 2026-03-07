@@ -4,13 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { getPost } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
-import { PostBody } from "@/components/reader/post-body";
 import { ReadingProgress } from "@/components/reader/reading-progress";
 import { TableOfContents } from "@/components/reader/table-of-contents";
 import { ShareButtons } from "@/components/reader/share-buttons";
 import { ScrollTracker } from "@/components/reader/scroll-tracker";
 
-interface Props { params: Promise<{ slug: string }>; }
+interface Props {
+  params: Promise<{ slug: string }>;
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
@@ -18,22 +19,31 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const post = await getPost(slug);
     return {
       title: post.meta_title ?? post.title,
-      description: post.meta_desc ?? post.summary,
+      description: post.meta_desc ?? post.excerpt,
       openGraph: {
-        title: post.title, description: post.summary, type: "article",
+        title: post.title,
+        description: post.excerpt,
+        type: "article",
         publishedTime: post.published_at,
-        images: post.og_image ? [{ url: post.og_image }] : post.cover_image ? [{ url: post.cover_image }] : [],
+        images: post.cover_image ? [{ url: post.cover_image }] : [],
       },
     };
-  } catch { return { title: "Post" }; }
+  } catch {
+    return { title: "Post" };
+  }
 }
 
 export const revalidate = 60;
 
 export default async function PostPage({ params }: Props) {
   const { slug } = await params;
+
   let post;
-  try { post = await getPost(slug); } catch { notFound(); }
+  try {
+    post = await getPost(slug);
+  } catch {
+    notFound();
+  }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
   const postUrl = `${siteUrl}/post/${post.slug}`;
@@ -43,6 +53,7 @@ export default async function PostPage({ params }: Props) {
         <ReadingProgress />
         <ScrollTracker postId={post.id} />
         <TableOfContents />
+
         <article className="pt-24">
           <div className="max-w-4xl mx-auto px-6 pt-12 pb-10">
             {post.section_slug && (
@@ -51,24 +62,30 @@ export default async function PostPage({ params }: Props) {
                   {post.section_slug}
                 </Link>
             )}
+
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mt-4 mb-6"
                 style={{ fontFamily: '"Playfair Display", serif' }}>
               {post.title}
             </h1>
-            {post.summary && (
+
+            {post.excerpt && (
                 <p className="text-xl text-[hsl(var(--muted-foreground))] font-sans leading-relaxed mb-8 max-w-2xl">
-                  {post.summary}
+                  {post.excerpt}
                 </p>
             )}
+
             <div className="flex items-center justify-between flex-wrap gap-4 py-6 border-t border-b border-[hsl(var(--border))]">
               <div className="flex items-center gap-4 text-sm font-sans text-[hsl(var(--muted-foreground))]">
                 {post.published_at && <time dateTime={post.published_at}>{formatDate(post.published_at)}</time>}
-                <span>·</span><span>{post.read_time} min read</span>
-                <span>·</span><span>{post.word_count.toLocaleString()} words</span>
+                <span>·</span>
+                <span>{post.reading_time_min} min read</span>
+                <span>·</span>
+                <span>{post.word_count.toLocaleString()} words</span>
               </div>
               <ShareButtons title={post.title} url={postUrl} />
             </div>
           </div>
+
           {post.cover_image && (
               <div className="max-w-5xl mx-auto px-6 mb-12">
                 <div className="relative aspect-[21/9] overflow-hidden rounded-sm">
@@ -76,11 +93,30 @@ export default async function PostPage({ params }: Props) {
                 </div>
               </div>
           )}
+
           <div className="max-w-2xl mx-auto px-6 pb-16">
-            {post.blocks && post.blocks.length > 0
-                ? <PostBody blocks={post.blocks} />
-                : <div className="prose-editorial text-[hsl(var(--muted-foreground))] italic">This post has no content yet.</div>
-            }
+            {post.content ? (
+                <div className="prose-editorial">
+                  {post.content.split("\n").map((line, i) => {
+                    if (line.startsWith("# ")) return <h2 key={i} className="text-2xl font-bold mt-8 mb-4" style={{ fontFamily: '"Playfair Display", serif' }}>{line.slice(2)}</h2>;
+                    if (line.startsWith("## ")) return <h2 key={i} className="text-2xl font-bold mt-8 mb-4" style={{ fontFamily: '"Playfair Display", serif' }}>{line.slice(3)}</h2>;
+                    if (line.startsWith("### ")) return <h3 key={i} className="text-xl font-bold mt-6 mb-3" style={{ fontFamily: '"Playfair Display", serif' }}>{line.slice(4)}</h3>;
+                    if (line.startsWith("> ")) return <blockquote key={i} className="border-l-4 border-[hsl(var(--accent))] pl-4 italic my-4 text-[hsl(var(--muted-foreground))]">{line.slice(2)}</blockquote>;
+                    if (line.startsWith("---")) return <hr key={i} className="my-8 border-[hsl(var(--border))]" />;
+                    if (line === "") return <br key={i} />;
+                    const html = line
+                        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+                        .replace(/\*(.+?)\*/g, "<em>$1</em>")
+                        .replace(/`(.+?)`/g, '<code class="font-mono text-sm bg-[hsl(var(--muted))] px-1 py-0.5 rounded">$1</code>');
+                    return <p key={i} dangerouslySetInnerHTML={{ __html: html }} />;
+                  })}
+                </div>
+            ) : (
+                <div className="prose-editorial text-[hsl(var(--muted-foreground))] italic">
+                  This post has no content yet.
+                </div>
+            )}
+
             <div className="mt-16 pt-8 border-t border-[hsl(var(--border))] flex items-center justify-between">
               <ShareButtons title={post.title} url={postUrl} />
               {post.section_slug && (

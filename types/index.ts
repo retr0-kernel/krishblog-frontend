@@ -4,30 +4,23 @@ export interface Post {
   id: string;
   title: string;
   slug: string;
-  summary: string;
+  excerpt: string;
+  content?: string; // only populated on single post view
   cover_image?: string;
   cover_image_alt?: string;
   status: "draft" | "scheduled" | "published" | "archived";
-  published: boolean;
-  read_time: number;
+  reading_time_min: number;
   word_count: number;
   is_featured: boolean;
   meta_title?: string;
   meta_desc?: string;
-  og_image?: string;
   published_at?: string;
+  scheduled_at?: string;
   section_slug?: string;
   section_id: string;
   author_id: string;
-  blocks?: PostBlock[];
-}
-
-export interface PostBlock {
-  id: string;
-  type: "heading" | "paragraph" | "image" | "code" | "quote" | "divider" | "embed" | "callout" | "list" | "table";
-  content: string;
-  attrs?: Record<string, unknown>;
-  position: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Section {
@@ -54,11 +47,6 @@ export interface ApiResponse<T> {
   data: T;
   error?: { code: string; message: string };
   meta?: PaginationMeta;
-}
-
-export interface PostsResponse {
-  posts: Post[];
-  meta: PaginationMeta;
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -88,15 +76,16 @@ export interface LoginResponse {
 export interface PostFormData {
   title: string;
   slug: string;
-  summary: string;
-  content: string; // raw markdown for the editor
+  excerpt: string;
+  content: string;
   section_id: string;
-  status: "draft" | "published" | "archived";
+  status: "draft" | "published" | "archived" | "scheduled";
   is_featured: boolean;
   cover_image: string;
   cover_image_alt: string;
   meta_title: string;
   meta_desc: string;
+  scheduled_at?: string | null;
 }
 
 // ── Analytics ─────────────────────────────────────────────────────────────────

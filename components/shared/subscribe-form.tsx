@@ -3,6 +3,8 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, CheckCircle2, Mail } from "lucide-react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+
 interface SubscribeFormProps {
     compact?: boolean;
     className?: string;
@@ -10,6 +12,7 @@ interface SubscribeFormProps {
 
 export function SubscribeForm({ compact = false, className = "" }: SubscribeFormProps) {
     const [email, setEmail] = useState("");
+    const [name, setName] = useState("");
     const [state, setState] = useState<"idle" | "loading" | "success" | "error">("idle");
     const [message, setMessage] = useState("");
 
@@ -19,20 +22,21 @@ export function SubscribeForm({ compact = false, className = "" }: SubscribeForm
         setState("loading");
 
         try {
-            const res = await fetch("/api/subscribe", {
+            const res = await fetch(`${API_URL}/v1/subscribe`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email }),
+                body: JSON.stringify({ email: email.trim(), name: name.trim() }),
             });
             const data = await res.json();
 
             if (!res.ok) {
                 setState("error");
-                setMessage(data.error ?? "Something went wrong. Try again.");
+                setMessage(data.error?.message ?? "Something went wrong. Try again.");
             } else {
                 setState("success");
-                setMessage(data.message ?? "Check your inbox to confirm.");
+                setMessage("Check your inbox to confirm your subscription.");
                 setEmail("");
+                setName("");
             }
         } catch {
             setState("error");
@@ -43,11 +47,8 @@ export function SubscribeForm({ compact = false, className = "" }: SubscribeForm
     if (state === "success") {
         return (
             <AnimatePresence>
-                <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`flex items-center gap-3 ${compact ? "text-sm" : ""} ${className}`}
-                >
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                            className={`flex items-center gap-3 ${compact ? "text-sm" : ""} ${className}`}>
                     <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
                     <p className="font-sans text-[hsl(var(--foreground))]">{message}</p>
                 </motion.div>
@@ -57,30 +58,21 @@ export function SubscribeForm({ compact = false, className = "" }: SubscribeForm
 
     return (
         <form onSubmit={handleSubmit} className={`w-full ${className}`}>
-            <div className="flex flex-col sm:flex-row gap-2">
+            {!compact && (
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+                       placeholder="Your name (optional)"
+                       className="w-full h-11 px-3 text-sm font-sans bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded focus:outline-none focus:border-[hsl(var(--accent))] transition-colors mb-2" />
+            )}
+            <div className="flex gap-2">
                 <div className="relative flex-1">
-                    {!compact && (
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-                    )}
-                    <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="your@email.com"
-                        required
-                        className={`w-full ${compact ? "h-9 px-3 text-sm" : "h-11 text-sm"} ${!compact ? "pl-9 pr-3" : "px-3"} font-sans bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded focus:outline-none focus:border-[hsl(var(--accent))] transition-colors`}
-                    />
+                    {!compact && <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />}
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                           placeholder="your@email.com" required
+                           className={`w-full ${compact ? "h-9 px-3 text-sm" : "h-11 pl-9 pr-3 text-sm"} font-sans bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded focus:outline-none focus:border-[hsl(var(--accent))] transition-colors`} />
                 </div>
-                <button
-                    type="submit"
-                    disabled={state === "loading" || !email.trim()}
-                    className={`flex items-center justify-center gap-2 ${compact ? "h-9 px-4 text-xs" : "h-11 px-6 text-sm"} font-sans font-medium bg-[hsl(var(--accent))] text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50 flex-shrink-0`}
-                >
-                    {state === "loading" ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                        "Subscribe"
-                    )}
+                <button type="submit" disabled={state === "loading" || !email.trim()}
+                        className={`flex items-center justify-center gap-2 ${compact ? "h-9 px-4 text-xs" : "h-11 px-6 text-sm"} font-sans font-medium bg-[hsl(var(--accent))] text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50 flex-shrink-0`}>
+                    {state === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Subscribe"}
                 </button>
             </div>
             {state === "error" && (
