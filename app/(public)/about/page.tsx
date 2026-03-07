@@ -12,12 +12,12 @@ export default function AboutPage() {
         <div className="pt-24">
             <div className="max-w-5xl mx-auto px-6 py-20">
 
-                {/* Two column — fixed left column so photo doesn't blow up */}
-                <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: "4rem", alignItems: "start" }}>
+                {/* Two column — responsive grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-8 lg:gap-16 items-start">
 
-                    {/* Left — photo fixed width */}
-                    <div className="flex flex-col gap-6">
-                        <div className="relative" style={{ width: "340px", height: "340px" }}>
+                    {/* Left — photo fixed width on large screens */}
+                    <div className="flex flex-col gap-6 mx-auto lg:mx-0">
+                        <div className="relative w-[280px] h-[280px] lg:w-[340px] lg:h-[340px]">
                             <div className="w-full h-full rounded-2xl bg-[hsl(var(--secondary))] border border-[hsl(var(--border))] overflow-hidden flex items-center justify-center">
                                 {/* Replace with: <Image src="/your-photo.jpg" alt="Krish" fill className="object-cover" /> */}
                                 <div className="flex flex-col items-center gap-3 text-[hsl(var(--muted-foreground))]">
@@ -31,7 +31,7 @@ export default function AboutPage() {
                         </div>
 
                         {/* Social icons */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 justify-center lg:justify-start">
                             <a href="mailto:hello@krishblog.com"
                                className="h-9 w-9 flex items-center justify-center rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--accent))] hover:border-[hsl(var(--accent))] transition-colors"
                                aria-label="Email">
@@ -98,8 +98,8 @@ export default function AboutPage() {
                 <div className="relative overflow-hidden rounded-2xl bg-[hsl(var(--card))] border border-[hsl(var(--border))]">
                     <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-[hsl(var(--accent)/0.06)] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
                     <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full bg-[hsl(var(--accent)/0.04)] translate-y-1/2 -translate-x-1/2 pointer-events-none" />
-                    <div className="relative px-10 py-12">
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3rem", alignItems: "center" }}>
+                    <div className="relative px-6 lg:px-10 py-12">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
                             <div>
                                 <p className="text-xs font-sans font-semibold uppercase tracking-widest text-[hsl(var(--accent))] mb-3">
                                     Newsletter

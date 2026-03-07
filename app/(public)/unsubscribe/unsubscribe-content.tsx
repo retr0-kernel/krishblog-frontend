@@ -7,7 +7,7 @@ import Link from "next/link";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
-export default function UnsubscribeContent() {
+function UnsubscribeContent() {
     const searchParams = useSearchParams();
     const token = searchParams.get("token");
     const [status, setStatus] = useState<"loading" | "success" | "error" | "idle">(token ? "loading" : "idle");
@@ -85,3 +85,6 @@ export default function UnsubscribeContent() {
         </div>
     );
 }
+
+export default UnsubscribeContent;
+

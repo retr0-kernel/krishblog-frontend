@@ -1,10 +1,13 @@
 "use client";
-import { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Save, Eye, EyeOff, Globe, FileText, Archive,
     ChevronDown, AlertCircle, CheckCircle2, Loader2, Bell,
+    Bold, Italic, Underline as UnderlineIcon, Heading1, Heading2, Heading3,
+    Heading4, List, ListOrdered, Quote, Code, Link as LinkIcon, Image as ImageIcon,
+    Minus
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { adminCreatePost, adminUpdatePost, adminGetSections } from "@/lib/api";
@@ -13,23 +16,79 @@ import { cn } from "@/lib/utils";
 
 function MarkdownPreview({ content }: { content: string }) {
     const lines = content.split("\n");
-    return (
-        <div className="prose-editorial max-w-none">
-            {lines.map((line, i) => {
-                if (line.startsWith("# ")) return <h2 key={i}>{line.slice(2)}</h2>;
-                if (line.startsWith("## ")) return <h2 key={i}>{line.slice(3)}</h2>;
-                if (line.startsWith("### ")) return <h3 key={i}>{line.slice(4)}</h3>;
-                if (line.startsWith("> ")) return <blockquote key={i}>{line.slice(2)}</blockquote>;
-                if (line.startsWith("---")) return <hr key={i} className="my-6 border-[hsl(var(--border))]" />;
-                if (line === "") return <br key={i} />;
-                const html = line
-                    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-                    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-                    .replace(/`(.+?)`/g, "<code>$1</code>");
-                return <p key={i} dangerouslySetInnerHTML={{ __html: html }} />;
-            })}
-        </div>
-    );
+    const result: React.ReactElement[] = [];
+    let inList = false;
+    let listItems: string[] = [];
+    let listType: "ul" | "ol" = "ul";
+
+    const flushList = (index: number) => {
+        if (inList && listItems.length > 0) {
+            const ListTag = listType;
+            result.push(
+                <ListTag key={`list-${index}`} className={listType === "ul" ? "list-disc list-inside" : "list-decimal list-inside"}>
+                    {listItems.map((item, i) => (
+                        <li key={i} dangerouslySetInnerHTML={{ __html: formatInline(item) }} />
+                    ))}
+                </ListTag>
+            );
+            listItems = [];
+            inList = false;
+        }
+    };
+
+    const formatInline = (text: string) => {
+        return text
+            .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+            .replace(/\*(.+?)\*/g, "<em>$1</em>")
+            .replace(/__(.+?)__/g, "<u>$1</u>")
+            .replace(/`(.+?)`/g, "<code>$1</code>")
+            .replace(/\[(.+?)]\((.+?)\)/g, '<a href="$2" class="text-[hsl(var(--accent))] hover:underline">$1</a>');
+    };
+
+    lines.forEach((line, i) => {
+        // Check for lists
+        if (line.match(/^[-*]\s+(.+)/)) {
+            const match = line.match(/^[-*]\s+(.+)/);
+            if (!inList) {
+                inList = true;
+                listType = "ul";
+            }
+            if (match) listItems.push(match[1]);
+            return;
+        } else if (line.match(/^\d+\.\s+(.+)/)) {
+            const match = line.match(/^\d+\.\s+(.+)/);
+            if (!inList) {
+                inList = true;
+                listType = "ol";
+            }
+            if (match) listItems.push(match[1]);
+            return;
+        } else {
+            flushList(i);
+        }
+
+        if (line.startsWith("# ")) {
+            result.push(<h1 key={i} className="text-3xl font-bold mt-8 mb-4">{line.slice(2)}</h1>);
+        } else if (line.startsWith("## ")) {
+            result.push(<h2 key={i} className="text-2xl font-bold mt-6 mb-3">{line.slice(3)}</h2>);
+        } else if (line.startsWith("### ")) {
+            result.push(<h3 key={i} className="text-xl font-bold mt-5 mb-2">{line.slice(4)}</h3>);
+        } else if (line.startsWith("#### ")) {
+            result.push(<h4 key={i} className="text-lg font-bold mt-4 mb-2">{line.slice(5)}</h4>);
+        } else if (line.startsWith("> ")) {
+            result.push(<blockquote key={i} className="border-l-4 border-[hsl(var(--accent))] pl-4 italic">{line.slice(2)}</blockquote>);
+        } else if (line.startsWith("---")) {
+            result.push(<hr key={i} className="my-6 border-[hsl(var(--border))]" />);
+        } else if (line === "") {
+            result.push(<br key={i} />);
+        } else {
+            result.push(<p key={i} dangerouslySetInnerHTML={{ __html: formatInline(line) }} />);
+        }
+    });
+
+    flushList(lines.length);
+
+    return <div className="prose-editorial max-w-none">{result}</div>;
 }
 
 interface PostEditorProps {
@@ -39,6 +98,7 @@ interface PostEditorProps {
 export function PostEditor({ post }: PostEditorProps) {
     const router = useRouter();
     const { token } = useAuth();
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const [sections, setSections] = useState<Section[]>([]);
     const [preview, setPreview] = useState(false);
@@ -47,6 +107,7 @@ export function PostEditor({ post }: PostEditorProps) {
     const [seoOpen, setSeoOpen] = useState(false);
     const [notifying, setNotifying] = useState(false);
     const [notifyState, setNotifyState] = useState<"idle" | "sent" | "error">("idle");
+    const [uploadingImage, setUploadingImage] = useState(false);
 
     const [form, setForm] = useState({
         title: post?.title ?? "",
@@ -112,16 +173,189 @@ export function PostEditor({ post }: PostEditorProps) {
         }
     }, [token, form, post, router]);
 
+    // Markdown formatting helper functions
+    const wrapSelection = useCallback((before: string, after: string = before) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selectedText = form.content.substring(start, end);
+        const beforeText = form.content.substring(0, start);
+        const afterText = form.content.substring(end);
+
+        if (selectedText) {
+            // Wrap selected text
+            const newContent = beforeText + before + selectedText + after + afterText;
+            setForm((f) => ({ ...f, content: newContent }));
+            setTimeout(() => {
+                textarea.focus();
+                textarea.setSelectionRange(start + before.length, end + before.length);
+            }, 0);
+        } else {
+            // Insert markers and place cursor between them
+            const newContent = beforeText + before + after + afterText;
+            setForm((f) => ({ ...f, content: newContent }));
+            setTimeout(() => {
+                textarea.focus();
+                textarea.setSelectionRange(start + before.length, start + before.length);
+            }, 0);
+        }
+    }, [form.content]);
+
+    const insertAtCursor = useCallback((text: string, offsetCursor: number = 0) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const beforeText = form.content.substring(0, start);
+        const afterText = form.content.substring(start);
+        const newContent = beforeText + text + afterText;
+        setForm((f) => ({ ...f, content: newContent }));
+
+        setTimeout(() => {
+            textarea.focus();
+            textarea.setSelectionRange(start + text.length + offsetCursor, start + text.length + offsetCursor);
+        }, 0);
+    }, [form.content]);
+
+    const insertHeading = useCallback((level: number) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const lines = form.content.split("\n");
+        let currentLine = 0;
+        let charCount = 0;
+
+        // Find which line the cursor is on
+        for (let i = 0; i < lines.length; i++) {
+            if (charCount + lines[i].length >= start) {
+                currentLine = i;
+                break;
+            }
+            charCount += lines[i].length + 1; // +1 for newline
+        }
+
+        const prefix = "#".repeat(level) + " ";
+        const line = lines[currentLine];
+
+        // Remove existing heading prefix if any
+        const cleanLine = line.replace(/^#{1,6}\s+/, "");
+        lines[currentLine] = prefix + cleanLine;
+
+        const newContent = lines.join("\n");
+        setForm((f) => ({ ...f, content: newContent }));
+
+        setTimeout(() => textarea.focus(), 0);
+    }, [form.content]);
+
+    const insertList = useCallback((ordered: boolean) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selectedText = form.content.substring(start, end);
+
+        if (selectedText && selectedText.includes("\n")) {
+            // Multi-line selection: convert each line to list item
+            const lines = selectedText.split("\n");
+            const listItems = lines.map((line, i) =>
+                ordered ? `${i + 1}. ${line}` : `- ${line}`
+            ).join("\n");
+
+            const beforeText = form.content.substring(0, start);
+            const afterText = form.content.substring(end);
+            const newContent = beforeText + listItems + afterText;
+            setForm((f) => ({ ...f, content: newContent }));
+            setTimeout(() => textarea.focus(), 0);
+        } else {
+            // Single line or no selection: insert list item
+            insertAtCursor(ordered ? "1. " : "- ", 0);
+        }
+    }, [form.content, insertAtCursor]);
+
+    const handleImagePaste = useCallback(async (e: ClipboardEvent) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image") !== -1) {
+                e.preventDefault();
+                const blob = items[i].getAsFile();
+                if (!blob) continue;
+
+                setUploadingImage(true);
+                try {
+                    // Create FormData and upload to your image hosting service
+                    // For now, we'll convert to base64 as a fallback
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const imageUrl = event.target?.result as string;
+                        // In production, you'd upload this to a CDN and get a URL
+                        // For now, insert a placeholder markdown
+                        const timestamp = Date.now();
+                        const imageName = `pasted-image-${timestamp}`;
+                        insertAtCursor(`![${imageName}](${imageUrl})`, 0);
+                    };
+                    reader.readAsDataURL(blob);
+                } catch (error) {
+                    console.error("Image paste failed:", error);
+                } finally {
+                    setUploadingImage(false);
+                }
+                break;
+            }
+        }
+    }, [insertAtCursor]);
+
+    useEffect(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        textarea.addEventListener("paste", handleImagePaste);
+        return () => textarea.removeEventListener("paste", handleImagePaste);
+    }, [handleImagePaste]);
+
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+            // Don't handle if not focused on textarea
+            if (document.activeElement !== textareaRef.current) {
+                // Only handle Cmd/Ctrl+S globally
+                if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+                    e.preventDefault();
+                    save();
+                }
+                return;
+            }
+
+            const isMod = e.metaKey || e.ctrlKey;
+
+            if (isMod && e.key === "s") {
                 e.preventDefault();
                 save();
+            } else if (isMod && e.key === "b") {
+                e.preventDefault();
+                wrapSelection("**");
+            } else if (isMod && e.key === "i") {
+                e.preventDefault();
+                wrapSelection("*");
+            } else if (isMod && e.key === "u") {
+                e.preventDefault();
+                wrapSelection("__");
+            } else if (isMod && e.key === "k") {
+                e.preventDefault();
+                wrapSelection("[", "](url)");
+            } else if (isMod && e.key === "`") {
+                e.preventDefault();
+                wrapSelection("`");
             }
         };
+
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [save]);
+    }, [save, wrapSelection]);
 
     const notifySubscribers = useCallback(async () => {
         if (!form.title || !form.slug) return;
@@ -252,16 +486,93 @@ export function PostEditor({ post }: PostEditorProps) {
                                 </motion.div>
                             ) : (
                                 <motion.div key="editor" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                                    {/* Formatting Toolbar */}
+                                    <div className="flex flex-wrap items-center gap-1 mb-3 pb-3 border-b border-[hsl(var(--border))]">
+                                        <button type="button" onClick={() => wrapSelection("**")} title="Bold (⌘B)"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <Bold className="h-4 w-4" />
+                                        </button>
+                                        <button type="button" onClick={() => wrapSelection("*")} title="Italic (⌘I)"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <Italic className="h-4 w-4" />
+                                        </button>
+                                        <button type="button" onClick={() => wrapSelection("__")} title="Underline (⌘U)"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <UnderlineIcon className="h-4 w-4" />
+                                        </button>
+
+                                        <div className="w-px h-5 bg-[hsl(var(--border))] mx-1" />
+
+                                        <button type="button" onClick={() => insertHeading(1)} title="Heading 1"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <Heading1 className="h-4 w-4" />
+                                        </button>
+                                        <button type="button" onClick={() => insertHeading(2)} title="Heading 2"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <Heading2 className="h-4 w-4" />
+                                        </button>
+                                        <button type="button" onClick={() => insertHeading(3)} title="Heading 3"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <Heading3 className="h-4 w-4" />
+                                        </button>
+                                        <button type="button" onClick={() => insertHeading(4)} title="Heading 4"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <Heading4 className="h-4 w-4" />
+                                        </button>
+
+                                        <div className="w-px h-5 bg-[hsl(var(--border))] mx-1" />
+
+                                        <button type="button" onClick={() => insertList(false)} title="Bullet List"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <List className="h-4 w-4" />
+                                        </button>
+                                        <button type="button" onClick={() => insertList(true)} title="Numbered List"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <ListOrdered className="h-4 w-4" />
+                                        </button>
+
+                                        <div className="w-px h-5 bg-[hsl(var(--border))] mx-1" />
+
+                                        <button type="button" onClick={() => insertAtCursor("> ", 0)} title="Quote"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <Quote className="h-4 w-4" />
+                                        </button>
+                                        <button type="button" onClick={() => wrapSelection("`")} title="Inline Code (⌘`)"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <Code className="h-4 w-4" />
+                                        </button>
+                                        <button type="button" onClick={() => wrapSelection("[", "](url)")} title="Link (⌘K)"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <LinkIcon className="h-4 w-4" />
+                                        </button>
+                                        <button type="button" onClick={() => insertAtCursor("![alt text](image-url)", -12)} title="Image"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <ImageIcon className="h-4 w-4" />
+                                        </button>
+                                        <button type="button" onClick={() => insertAtCursor("\n---\n", 0)} title="Horizontal Rule"
+                                                className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+                                            <Minus className="h-4 w-4" />
+                                        </button>
+
+                                        {uploadingImage && (
+                                            <span className="text-xs font-sans text-[hsl(var(--muted-foreground))] flex items-center gap-1 ml-2">
+                                                <Loader2 className="h-3 w-3 animate-spin" /> Uploading...
+                                            </span>
+                                        )}
+                                    </div>
+
                                     <div className="relative">
-                                        <div className="absolute top-0 right-0 text-[10px] font-sans text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] px-1.5 py-0.5 rounded-bl">
+                                        <div className="absolute top-0 right-0 text-[10px] font-sans text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] px-1.5 py-0.5 rounded-bl z-10">
                                             Markdown
                                         </div>
-                                        <textarea value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                                                  placeholder={"# Start writing...\n\nUse markdown: **bold**, *italic*, `code`, > quotes\n\n---\n\nFor headings use # or ##"}
+                                        <textarea ref={textareaRef}
+                                                  value={form.content}
+                                                  onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                                                  placeholder={"# Start writing...\n\nUse markdown:\n**bold** (⌘B), *italic* (⌘I), __underline__ (⌘U)\n`code` (⌘`), [link](url) (⌘K)\n\n- Bullet lists with - or *\n1. Numbered lists with 1.\n\n> Quotes with >\n\n---\n\nPaste images directly!"}
                                                   rows={28} className="editor-textarea" spellCheck />
                                     </div>
                                     <p className="text-[10px] font-sans text-[hsl(var(--muted-foreground))] mt-2">
-                                        {form.content.split(/\s+/).filter(Boolean).length} words · ⌘S to save
+                                        {form.content.split(/\s+/).filter(Boolean).length} words · ⌘S to save · Paste images to embed
                                     </p>
                                 </motion.div>
                             )}

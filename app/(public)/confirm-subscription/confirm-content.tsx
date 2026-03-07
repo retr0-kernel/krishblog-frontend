@@ -7,7 +7,7 @@ import Link from "next/link";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
-export default function ConfirmContent() {
+function ConfirmContent() {
     const searchParams = useSearchParams();
     const token = searchParams.get("token");
     const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
@@ -15,8 +15,10 @@ export default function ConfirmContent() {
 
     useEffect(() => {
         if (!token) {
-            setStatus("error");
-            setMessage("No confirmation token found in the URL.");
+            setTimeout(() => {
+                setStatus("error");
+                setMessage("No confirmation token found in the URL.");
+            }, 0);
             return;
         }
         fetch(`${API_URL}/v1/subscribe/confirm?token=${encodeURIComponent(token)}`)
@@ -78,3 +80,6 @@ export default function ConfirmContent() {
         </div>
     );
 }
+
+export default ConfirmContent;
+
