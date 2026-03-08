@@ -142,6 +142,20 @@ interface PostEditorProps {
     post?: Post;
 }
 
+interface FormState {
+    title: string;
+    slug: string;
+    excerpt: string;
+    content: string;
+    section_id: string;
+    status: "draft" | "published" | "archived";
+    is_featured: boolean;
+    cover_image: string;
+    cover_image_alt: string;
+    meta_title: string;
+    meta_desc: string;
+}
+
 export function PostEditor({ post }: PostEditorProps) {
     const router = useRouter();
     const { token } = useAuth();
@@ -156,19 +170,51 @@ export function PostEditor({ post }: PostEditorProps) {
     const [notifyState, setNotifyState] = useState<"idle" | "sent" | "error">("idle");
     const [uploadingImage, setUploadingImage] = useState(false);
 
-    const [form, setForm] = useState({
-        title: post?.title ?? "",
-        slug: post?.slug ?? "",
-        excerpt: post?.excerpt ?? "",
-        content: post?.content ?? "",
-        section_id: post?.section_id ?? "",
-        status: (post?.status ?? "draft") as "draft" | "published" | "archived",
-        is_featured: post?.is_featured ?? false,
-        cover_image: post?.cover_image ?? "",
-        cover_image_alt: post?.cover_image_alt ?? "",
-        meta_title: post?.meta_title ?? "",
-        meta_desc: post?.meta_desc ?? "",
+    // Generate a unique key for localStorage based on post ID or "new"
+    const draftKey = `post-draft-${post?.id ?? "new"}`;
+
+    const [form, setForm] = useState<FormState>(() => {
+        // Initialize from localStorage if available, otherwise use post data
+        if (typeof window !== "undefined") {
+            const savedDraft = localStorage.getItem(draftKey);
+            if (savedDraft) {
+                try {
+                    const parsed = JSON.parse(savedDraft);
+                    // Only use saved draft if it's newer than the post (or if it's a new post)
+                    if (!post || parsed.savedAt > (post.updated_at || post.created_at)) {
+                        return parsed.form;
+                    }
+                } catch (e) {
+                    console.error("Failed to parse saved draft:", e);
+                }
+            }
+        }
+
+        return {
+            title: post?.title ?? "",
+            slug: post?.slug ?? "",
+            excerpt: post?.excerpt ?? "",
+            content: post?.content ?? "",
+            section_id: post?.section_id ?? "",
+            status: (post?.status ?? "draft") as "draft" | "published" | "archived",
+            is_featured: post?.is_featured ?? false,
+            cover_image: post?.cover_image ?? "",
+            cover_image_alt: post?.cover_image_alt ?? "",
+            meta_title: post?.meta_title ?? "",
+            meta_desc: post?.meta_desc ?? "",
+        };
     });
+
+    // Auto-save to localStorage whenever form changes
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const draftData = {
+                form,
+                savedAt: new Date().toISOString(),
+            };
+            localStorage.setItem(draftKey, JSON.stringify(draftData));
+        }
+    }, [form, draftKey]);
 
     useEffect(() => {
         if (token) adminGetSections(token).then(setSections).catch(() => {});
@@ -206,8 +252,16 @@ export function PostEditor({ post }: PostEditorProps) {
                 await adminUpdatePost(token, post.id, payload);
             } else {
                 const created = await adminCreatePost(token, payload);
+                // Clear the draft for new posts before navigating
+                if (typeof window !== "undefined") {
+                    localStorage.removeItem(draftKey);
+                }
                 router.replace(`/admin/posts/${created.id}`);
                 return;
+            }
+            // Clear the localStorage draft after successful save
+            if (typeof window !== "undefined") {
+                localStorage.removeItem(draftKey);
             }
             setSaveState("saved");
             if (statusOverride) setForm((f) => ({ ...f, status: statusOverride as "draft" | "published" | "archived" }));
@@ -218,7 +272,7 @@ export function PostEditor({ post }: PostEditorProps) {
         } finally {
             setSaving(false);
         }
-    }, [token, form, post, router]);
+    }, [token, form, post, router, draftKey]);
 
     // Markdown formatting helper functions
     const wrapSelection = useCallback((before: string, after: string = before) => {
@@ -459,6 +513,28 @@ export function PostEditor({ post }: PostEditorProps) {
         }
     }, [form.title, form.slug, form.excerpt]);
 
+    const clearDraft = useCallback(() => {
+        if (typeof window !== "undefined") {
+            localStorage.removeItem(draftKey);
+        }
+        // Reset form to original post data or empty values
+        setForm({
+            title: post?.title ?? "",
+            slug: post?.slug ?? "",
+            excerpt: post?.excerpt ?? "",
+            content: post?.content ?? "",
+            section_id: post?.section_id ?? "",
+            status: (post?.status ?? "draft") as "draft" | "published" | "archived",
+            is_featured: post?.is_featured ?? false,
+            cover_image: post?.cover_image ?? "",
+            cover_image_alt: post?.cover_image_alt ?? "",
+            meta_title: post?.meta_title ?? "",
+            meta_desc: post?.meta_desc ?? "",
+        });
+    }, [draftKey, post]);
+
+    const hasDraft = typeof window !== "undefined" && localStorage.getItem(draftKey) !== null;
+
     return (
         <div className="flex flex-col h-full">
             {/* Toolbar */}
@@ -479,6 +555,19 @@ export function PostEditor({ post }: PostEditorProps) {
                                      className="flex items-center gap-1 text-xs font-sans text-[hsl(var(--destructive))]">
                             <AlertCircle className="h-3.5 w-3.5" /> Save failed
                         </motion.span>
+                    )}
+                    {hasDraft && saveState === "idle" && (
+                        <motion.div initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
+                                     className="flex items-center gap-2">
+                            <span className="flex items-center gap-1 text-xs font-sans text-orange-600 dark:text-orange-400">
+                                <FileText className="h-3.5 w-3.5" /> Draft auto-saved
+                            </span>
+                            <button onClick={clearDraft}
+                                    title="Discard draft changes and revert to saved version"
+                                    className="text-xs font-sans text-muted-foreground hover:text-foreground underline">
+                                Clear
+                            </button>
+                        </motion.div>
                     )}
                 </AnimatePresence>
 
