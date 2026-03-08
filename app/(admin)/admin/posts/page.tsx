@@ -110,7 +110,7 @@ export default function AdminPostsPage() {
                                           className="h-7 w-7 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
                                         <Eye className="h-3.5 w-3.5" />
                                     </Link>
-                                    <Link href={`/admin/posts/${post.id}`}
+                                    <Link href={`/admin/posts/${post.slug}`}
                                           className="h-7 w-7 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
                                         <Edit className="h-3.5 w-3.5" />
                                     </Link>

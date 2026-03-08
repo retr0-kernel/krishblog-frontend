@@ -2,12 +2,12 @@
 import { useEffect, useState } from "react";
 import { use } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { adminGetPost } from "@/lib/api";
+import { adminGetPostBySlug } from "@/lib/api";
 import { PostEditor } from "@/components/admin/post-editor";
 import type { Post } from "@/types";
 
 export default function EditPostPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = use(params);
+    const { id: slug } = use(params); // id param is actually the slug now
     const { token } = useAuth();
     const [post, setPost] = useState<Post | null>(null);
     const [loading, setLoading] = useState(true);
@@ -15,18 +15,29 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
 
     useEffect(() => {
         if (!token) return;
-        adminGetPost(token, id)
+
+        adminGetPostBySlug(token, slug)
             .then(setPost)
-            .catch((e) => setError(e.message))
+            .catch((e) => {
+                console.error("Failed to fetch post by slug:", e.message);
+                setError(`Post not found with slug: "${slug}"`);
+            })
             .finally(() => setLoading(false));
-    }, [token, id]);
+    }, [token, slug]);
 
     if (loading) return (
         <div className="h-dvh flex items-center justify-center">
             <div className="h-6 w-6 border-2 border-[hsl(var(--accent))] border-t-transparent rounded-full animate-spin" />
         </div>
     );
-    if (error) return <div className="p-8 text-center text-[hsl(var(--destructive))] font-sans">{error}</div>;
+    if (error) return (
+        <div className="p-8 text-center">
+            <div className="text-[hsl(var(--destructive))] font-sans mb-4">{error}</div>
+            <a href="/admin/posts" className="text-sm text-[hsl(var(--accent))] hover:underline">
+                ← Back to posts
+            </a>
+        </div>
+    );
     if (!post) return null;
 
     return (

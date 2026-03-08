@@ -1,13 +1,12 @@
 "use client";
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Save, Eye, EyeOff, Globe, FileText, Archive,
     ChevronDown, AlertCircle, CheckCircle2, Loader2, Bell,
     Bold, Italic, Underline as UnderlineIcon, Heading1, Heading2, Heading3,
     Heading4, List, ListOrdered, Quote, Code, Code2, Link as LinkIcon, Image as ImageIcon,
-    Minus
+    Minus, ExternalLink
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { adminCreatePost, adminUpdatePost, adminGetSections } from "@/lib/api";
@@ -156,11 +155,11 @@ interface FormState {
     meta_desc: string;
 }
 
-export function PostEditor({ post }: PostEditorProps) {
-    const router = useRouter();
+export function PostEditor({ post: initialPost }: PostEditorProps) {
     const { token } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+    const [currentPost, setCurrentPost] = useState<Post | undefined>(initialPost);
     const [sections, setSections] = useState<Section[]>([]);
     const [preview, setPreview] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -169,9 +168,10 @@ export function PostEditor({ post }: PostEditorProps) {
     const [notifying, setNotifying] = useState(false);
     const [notifyState, setNotifyState] = useState<"idle" | "sent" | "error">("idle");
     const [uploadingImage, setUploadingImage] = useState(false);
+    const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
 
     // Generate a unique key for localStorage based on post ID or "new"
-    const draftKey = `post-draft-${post?.id ?? "new"}`;
+    const draftKey = `post-draft-${currentPost?.id ?? "new"}`;
 
     const [form, setForm] = useState<FormState>(() => {
         // Initialize from localStorage if available, otherwise use post data
@@ -181,7 +181,7 @@ export function PostEditor({ post }: PostEditorProps) {
                 try {
                     const parsed = JSON.parse(savedDraft);
                     // Only use saved draft if it's newer than the post (or if it's a new post)
-                    if (!post || parsed.savedAt > (post.updated_at || post.created_at)) {
+                    if (!currentPost || parsed.savedAt > (currentPost.updated_at || currentPost.created_at)) {
                         return parsed.form;
                     }
                 } catch (e) {
@@ -191,17 +191,17 @@ export function PostEditor({ post }: PostEditorProps) {
         }
 
         return {
-            title: post?.title ?? "",
-            slug: post?.slug ?? "",
-            excerpt: post?.excerpt ?? "",
-            content: post?.content ?? "",
-            section_id: post?.section_id ?? "",
-            status: (post?.status ?? "draft") as "draft" | "published" | "archived",
-            is_featured: post?.is_featured ?? false,
-            cover_image: post?.cover_image ?? "",
-            cover_image_alt: post?.cover_image_alt ?? "",
-            meta_title: post?.meta_title ?? "",
-            meta_desc: post?.meta_desc ?? "",
+            title: currentPost?.title ?? "",
+            slug: currentPost?.slug ?? "",
+            excerpt: currentPost?.excerpt ?? "",
+            content: currentPost?.content ?? "",
+            section_id: currentPost?.section_id ?? "",
+            status: (currentPost?.status ?? "draft") as "draft" | "published" | "archived",
+            is_featured: currentPost?.is_featured ?? false,
+            cover_image: currentPost?.cover_image ?? "",
+            cover_image_alt: currentPost?.cover_image_alt ?? "",
+            meta_title: currentPost?.meta_title ?? "",
+            meta_desc: currentPost?.meta_desc ?? "",
         };
     });
 
@@ -224,7 +224,7 @@ export function PostEditor({ post }: PostEditorProps) {
         setForm((f) => ({
             ...f,
             title,
-            slug: post ? f.slug : title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+            slug: currentPost ? f.slug : title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
         }));
     };
 
@@ -248,23 +248,37 @@ export function PostEditor({ post }: PostEditorProps) {
         };
 
         try {
-            if (post) {
-                await adminUpdatePost(token, post.id, payload);
+            let savedPost: Post;
+            if (currentPost) {
+                savedPost = await adminUpdatePost(token, currentPost.id, payload);
             } else {
-                const created = await adminCreatePost(token, payload);
-                // Clear the draft for new posts before navigating
+                savedPost = await adminCreatePost(token, payload);
+                // Update the current post state with the newly created post
+                setCurrentPost(savedPost);
+                // Clear the draft for new posts
                 if (typeof window !== "undefined") {
                     localStorage.removeItem(draftKey);
+                    // Update localStorage key for future saves
+                    localStorage.removeItem(`post-draft-new`);
                 }
-                router.replace(`/admin/posts/${created.id}`);
-                return;
+                // Update the URL without navigation - use slug instead of ID
+                window.history.replaceState({}, '', `/admin/posts/${savedPost.slug}`);
             }
             // Clear the localStorage draft after successful save
             if (typeof window !== "undefined") {
                 localStorage.removeItem(draftKey);
             }
             setSaveState("saved");
+
+            // Track the slug if the post is published
+            if (savedPost.status === "published" && savedPost.slug) {
+                setPublishedSlug(savedPost.slug);
+            } else {
+                setPublishedSlug(null);
+            }
+
             if (statusOverride) setForm((f) => ({ ...f, status: statusOverride as "draft" | "published" | "archived" }));
+
             setTimeout(() => setSaveState("idle"), 3000);
         } catch (err) {
             setSaveState("error");
@@ -272,7 +286,7 @@ export function PostEditor({ post }: PostEditorProps) {
         } finally {
             setSaving(false);
         }
-    }, [token, form, post, router, draftKey]);
+    }, [token, form, currentPost, draftKey]);
 
     // Markdown formatting helper functions
     const wrapSelection = useCallback((before: string, after: string = before) => {
@@ -519,19 +533,19 @@ export function PostEditor({ post }: PostEditorProps) {
         }
         // Reset form to original post data or empty values
         setForm({
-            title: post?.title ?? "",
-            slug: post?.slug ?? "",
-            excerpt: post?.excerpt ?? "",
-            content: post?.content ?? "",
-            section_id: post?.section_id ?? "",
-            status: (post?.status ?? "draft") as "draft" | "published" | "archived",
-            is_featured: post?.is_featured ?? false,
-            cover_image: post?.cover_image ?? "",
-            cover_image_alt: post?.cover_image_alt ?? "",
-            meta_title: post?.meta_title ?? "",
-            meta_desc: post?.meta_desc ?? "",
+            title: currentPost?.title ?? "",
+            slug: currentPost?.slug ?? "",
+            excerpt: currentPost?.excerpt ?? "",
+            content: currentPost?.content ?? "",
+            section_id: currentPost?.section_id ?? "",
+            status: (currentPost?.status ?? "draft") as "draft" | "published" | "archived",
+            is_featured: currentPost?.is_featured ?? false,
+            cover_image: currentPost?.cover_image ?? "",
+            cover_image_alt: currentPost?.cover_image_alt ?? "",
+            meta_title: currentPost?.meta_title ?? "",
+            meta_desc: currentPost?.meta_desc ?? "",
         });
-    }, [draftKey, post]);
+    }, [draftKey, currentPost]);
 
     const hasDraft = typeof window !== "undefined" && localStorage.getItem(draftKey) !== null;
 
@@ -545,10 +559,18 @@ export function PostEditor({ post }: PostEditorProps) {
 
                 <AnimatePresence>
                     {saveState === "saved" && (
-                        <motion.span initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
-                                     className="flex items-center gap-1 text-xs font-sans text-green-600 dark:text-green-400">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Saved
-                        </motion.span>
+                        <motion.div initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
+                                     className="flex items-center gap-2">
+                            <span className="flex items-center gap-1 text-xs font-sans text-green-600 dark:text-green-400">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Saved
+                            </span>
+                            {publishedSlug && (
+                                <a href={`/post/${publishedSlug}`} target="_blank" rel="noopener noreferrer"
+                                   className="flex items-center gap-1 text-xs font-sans text-blue-600 dark:text-blue-400 hover:underline">
+                                    <ExternalLink className="h-3.5 w-3.5" /> View post
+                                </a>
+                            )}
+                        </motion.div>
                     )}
                     {saveState === "error" && (
                         <motion.span initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
@@ -610,7 +632,7 @@ export function PostEditor({ post }: PostEditorProps) {
                     </div>
                 </div>
 
-                {(post?.status === "published" || form.status === "published") && (
+                {(currentPost?.status === "published" || form.status === "published") && (
                     <button onClick={notifySubscribers} disabled={notifying}
                             title="Send email notification to all subscribers"
                             className={cn(

@@ -120,6 +120,17 @@ export async function adminGetPost(token: string, id: string): Promise<Post> {
   return r.data;
 }
 
+export async function adminGetPostBySlug(token: string, slug: string): Promise<Post> {
+  // Workaround: Use the admin posts list endpoint to find by slug
+  // since the backend's GET /admin/posts/{id} endpoint has a bug
+  const { posts } = await adminGetPosts(token, { per_page: 1000 });
+  const post = posts.find(p => p.slug === slug);
+  if (!post) {
+    throw new Error(`Post with slug "${slug}" not found`);
+  }
+  return post;
+}
+
 export async function adminCreatePost(token: string, body: Partial<PostFormData>): Promise<Post> {
   const r = await apiFetch<Post>("/v1/admin/posts", {
     method: "POST",
