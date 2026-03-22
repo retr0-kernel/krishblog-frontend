@@ -97,19 +97,124 @@ export default async function PostPage({ params }: Props) {
           <div className="max-w-2xl mx-auto px-6 pb-16">
             {post.content ? (
                 <div className="prose-editorial">
-                  {post.content.split("\n").map((line, i) => {
-                    if (line.startsWith("# ")) return <h2 key={i} className="text-2xl font-bold mt-8 mb-4" style={{ fontFamily: '"Playfair Display", serif' }}>{line.slice(2)}</h2>;
-                    if (line.startsWith("## ")) return <h2 key={i} className="text-2xl font-bold mt-8 mb-4" style={{ fontFamily: '"Playfair Display", serif' }}>{line.slice(3)}</h2>;
-                    if (line.startsWith("### ")) return <h3 key={i} className="text-xl font-bold mt-6 mb-3" style={{ fontFamily: '"Playfair Display", serif' }}>{line.slice(4)}</h3>;
-                    if (line.startsWith("> ")) return <blockquote key={i} className="border-l-4 border-[hsl(var(--accent))] pl-4 italic my-4 text-[hsl(var(--muted-foreground))]">{line.slice(2)}</blockquote>;
-                    if (line.startsWith("---")) return <hr key={i} className="my-8 border-[hsl(var(--border))]" />;
-                    if (line === "") return <br key={i} />;
-                    const html = line
+                  {(() => {
+                    const lines = post.content.split("\n");
+                    const result: React.ReactElement[] = [];
+                    let inList = false;
+                    let listItems: string[] = [];
+                    let listType: "ul" | "ol" = "ul";
+                    let inCodeBlock = false;
+                    let codeBlockLines: string[] = [];
+                    let codeBlockLang = "";
+
+                    const formatInline = (text: string) => {
+                      return text
                         .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
                         .replace(/\*(.+?)\*/g, "<em>$1</em>")
-                        .replace(/`(.+?)`/g, '<code class="font-mono text-sm bg-[hsl(var(--muted))] px-1 py-0.5 rounded">$1</code>');
-                    return <p key={i} dangerouslySetInnerHTML={{ __html: html }} />;
-                  })}
+                        .replace(/`(.+?)`/g, '<code class="font-mono text-sm bg-[hsl(var(--muted))] px-1 py-0.5 rounded">$1</code>')
+                        .replace(/\[([^]]+?)\]\(([^\s)]+)\)/g, (_match, label, url) => {
+                          return `<a href="${url}" class="text-[hsl(var(--accent))] underline underline-offset-2 hover:opacity-80" target="_blank" rel="noopener noreferrer">${label}</a>`;
+                        });
+                    };
+
+                    const flushList = (index: number) => {
+                      if (inList && listItems.length > 0) {
+                        const ListTag = listType;
+                        result.push(
+                          <ListTag key={`list-${index}`} className={listType === "ul" ? "list-disc list-inside" : "list-decimal list-inside"}>
+                            {listItems.map((item, i) => (
+                              <li key={i} dangerouslySetInnerHTML={{ __html: formatInline(item) }} />
+                            ))}
+                          </ListTag>
+                        );
+                        listItems = [];
+                        inList = false;
+                      }
+                    };
+
+                    const flushCodeBlock = (index: number) => {
+                      if (inCodeBlock && codeBlockLines.length > 0) {
+                        result.push(
+                          <div key={`code-${index}`} className="my-4">
+                            {codeBlockLang && (
+                              <div className="text-[10px] font-mono text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] px-3 py-1 rounded-t border border-b-0 border-[hsl(var(--border))]">
+                                {codeBlockLang}
+                              </div>
+                            )}
+                            <pre className={`bg-[hsl(var(--muted))] border border-[hsl(var(--border))] p-4 overflow-x-auto font-mono text-sm text-[hsl(var(--foreground))] ${codeBlockLang ? "rounded-b" : "rounded"}`}>
+                              <code className="text-[hsl(var(--foreground))]">{codeBlockLines.join("\n")}</code>
+                            </pre>
+                          </div>
+                        );
+                        codeBlockLines = [];
+                        codeBlockLang = "";
+                        inCodeBlock = false;
+                      }
+                    };
+
+                    lines.forEach((line, i) => {
+                      const trimmed = line.trim();
+
+                      if (line.startsWith("```") || trimmed === "`") {
+                        if (inCodeBlock) {
+                          flushCodeBlock(i);
+                        } else {
+                          flushList(i);
+                          inCodeBlock = true;
+                          codeBlockLang = line.startsWith("```") ? line.slice(3).trim() : "";
+                        }
+                        return;
+                      }
+
+                      if (inCodeBlock) {
+                        codeBlockLines.push(line);
+                        return;
+                      }
+
+                      if (line.match(/^[-*]\s+(.+)/)) {
+                        const match = line.match(/^[-*]\s+(.+)/);
+                        if (!inList) {
+                          inList = true;
+                          listType = "ul";
+                        }
+                        if (match) listItems.push(match[1]);
+                        return;
+                      }
+
+                      if (line.match(/^\d+\.\s+(.+)/)) {
+                        const match = line.match(/^\d+\.\s+(.+)/);
+                        if (!inList) {
+                          inList = true;
+                          listType = "ol";
+                        }
+                        if (match) listItems.push(match[1]);
+                        return;
+                      }
+
+                      flushList(i);
+
+                      if (line.startsWith("# ")) {
+                        result.push(<h2 key={i} className="text-2xl font-bold mt-8 mb-4 scroll-mt-24" style={{ fontFamily: '"Playfair Display", serif' }}>{line.slice(2)}</h2>);
+                      } else if (line.startsWith("## ")) {
+                        result.push(<h2 key={i} className="text-2xl font-bold mt-8 mb-4 scroll-mt-24" style={{ fontFamily: '"Playfair Display", serif' }}>{line.slice(3)}</h2>);
+                      } else if (line.startsWith("### ")) {
+                        result.push(<h3 key={i} className="text-xl font-bold mt-6 mb-3 scroll-mt-24" style={{ fontFamily: '"Playfair Display", serif' }}>{line.slice(4)}</h3>);
+                      } else if (line.startsWith("> ")) {
+                        result.push(<blockquote key={i} className="border-l-4 border-[hsl(var(--accent))] pl-4 italic my-4 text-[hsl(var(--muted-foreground))]">{line.slice(2)}</blockquote>);
+                      } else if (line.startsWith("---")) {
+                        result.push(<hr key={i} className="my-8 border-[hsl(var(--border))]" />);
+                      } else if (line === "") {
+                        result.push(<br key={i} />);
+                      } else {
+                        result.push(<p key={i} dangerouslySetInnerHTML={{ __html: formatInline(line) }} />);
+                      }
+                    });
+
+                    flushList(lines.length);
+                    flushCodeBlock(lines.length);
+
+                    return result;
+                  })()}
                 </div>
             ) : (
                 <div className="prose-editorial text-[hsl(var(--muted-foreground))] italic">
