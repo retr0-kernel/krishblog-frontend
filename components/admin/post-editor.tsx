@@ -158,6 +158,7 @@ interface FormState {
 export function PostEditor({ post: initialPost }: PostEditorProps) {
     const { token } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const selectionRef = useRef({ start: 0, end: 0 });
 
     const [currentPost, setCurrentPost] = useState<Post | undefined>(initialPost);
     const [sections, setSections] = useState<Section[]>([]);
@@ -204,6 +205,43 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
             meta_desc: currentPost?.meta_desc ?? "",
         };
     });
+
+    const hydrateFormFromPost = useCallback((post: Post) => {
+        setForm({
+            title: post.title ?? "",
+            slug: post.slug ?? "",
+            excerpt: post.excerpt ?? "",
+            content: post.content ?? "",
+            section_id: post.section_id ?? "",
+            status: (post.status ?? "draft") as "draft" | "published" | "archived",
+            is_featured: post.is_featured ?? false,
+            cover_image: post.cover_image ?? "",
+            cover_image_alt: post.cover_image_alt ?? "",
+            meta_title: post.meta_title ?? "",
+            meta_desc: post.meta_desc ?? "",
+        });
+    }, []);
+
+    useEffect(() => {
+        if (!initialPost) return;
+        setCurrentPost(initialPost);
+        if (typeof window !== "undefined") {
+            const nextDraftKey = `post-draft-${initialPost.id ?? "new"}`;
+            const savedDraft = localStorage.getItem(nextDraftKey);
+            if (savedDraft) {
+                try {
+                    const parsed = JSON.parse(savedDraft);
+                    if (parsed.savedAt > (initialPost.updated_at || initialPost.created_at)) {
+                        setForm(parsed.form);
+                        return;
+                    }
+                } catch (e) {
+                    console.error("Failed to parse saved draft:", e);
+                }
+            }
+        }
+        hydrateFormFromPost(initialPost);
+    }, [initialPost, hydrateFormFromPost]);
 
     // Auto-save to localStorage whenever form changes
     useEffect(() => {
@@ -288,13 +326,34 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
         }
     }, [token, form, currentPost, draftKey]);
 
+    const updateSelectionFromTextarea = useCallback(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+        selectionRef.current = {
+            start: textarea.selectionStart,
+            end: textarea.selectionEnd,
+        };
+    }, []);
+
+    const restoreSelection = useCallback(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return null;
+        const { start, end } = selectionRef.current;
+        if (document.activeElement !== textarea) {
+            textarea.focus();
+            textarea.setSelectionRange(start, end);
+        }
+        return { start: textarea.selectionStart, end: textarea.selectionEnd };
+    }, []);
+
     // Markdown formatting helper functions
     const wrapSelection = useCallback((before: string, after: string = before) => {
         const textarea = textareaRef.current;
         if (!textarea) return;
 
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
+        const selection = restoreSelection();
+        if (!selection) return;
+        const { start, end } = selection;
         const selectedText = form.content.substring(start, end);
         const beforeText = form.content.substring(0, start);
         const afterText = form.content.substring(end);
@@ -316,13 +375,15 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                 textarea.setSelectionRange(start + before.length, start + before.length);
             }, 0);
         }
-    }, [form.content]);
+    }, [form.content, restoreSelection]);
 
     const insertAtCursor = useCallback((text: string, offsetCursor: number = 0) => {
         const textarea = textareaRef.current;
         if (!textarea) return;
 
-        const start = textarea.selectionStart;
+        const selection = restoreSelection();
+        if (!selection) return;
+        const { start } = selection;
         const beforeText = form.content.substring(0, start);
         const afterText = form.content.substring(start);
         const newContent = beforeText + text + afterText;
@@ -332,13 +393,15 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
             textarea.focus();
             textarea.setSelectionRange(start + text.length + offsetCursor, start + text.length + offsetCursor);
         }, 0);
-    }, [form.content]);
+    }, [form.content, restoreSelection]);
 
     const insertHeading = useCallback((level: number) => {
         const textarea = textareaRef.current;
         if (!textarea) return;
 
-        const start = textarea.selectionStart;
+        const selection = restoreSelection();
+        if (!selection) return;
+        const { start } = selection;
         const lines = form.content.split("\n");
         let currentLine = 0;
         let charCount = 0;
@@ -363,14 +426,15 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
         setForm((f) => ({ ...f, content: newContent }));
 
         setTimeout(() => textarea.focus(), 0);
-    }, [form.content]);
+    }, [form.content, restoreSelection]);
 
     const insertList = useCallback((ordered: boolean) => {
         const textarea = textareaRef.current;
         if (!textarea) return;
 
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
+        const selection = restoreSelection();
+        if (!selection) return;
+        const { start, end } = selection;
         const selectedText = form.content.substring(start, end);
 
         if (selectedText && selectedText.includes("\n")) {
@@ -389,14 +453,15 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
             // Single line or no selection: insert list item
             insertAtCursor(ordered ? "1. " : "- ", 0);
         }
-    }, [form.content, insertAtCursor]);
+    }, [form.content, insertAtCursor, restoreSelection]);
 
     const insertCodeBlock = useCallback((language: string = "") => {
         const textarea = textareaRef.current;
         if (!textarea) return;
 
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
+        const selection = restoreSelection();
+        if (!selection) return;
+        const { start, end } = selection;
         const selectedText = form.content.substring(start, end);
         const beforeText = form.content.substring(0, start);
         const afterText = form.content.substring(end);
@@ -422,7 +487,7 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                 textarea.setSelectionRange(newPos, newPos);
             }, 0);
         }
-    }, [form.content]);
+    }, [form.content, restoreSelection]);
 
     const handleImagePaste = useCallback(async (e: ClipboardEvent) => {
         const items = e.clipboardData?.items;
@@ -678,7 +743,10 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                             ) : (
                                 <motion.div key="editor" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                                     {/* Formatting Toolbar */}
-                                    <div className="flex flex-wrap items-center gap-1 mb-3 pb-3 border-b border-[hsl(var(--border))]">
+                                    <div className="flex flex-wrap items-center gap-1 mb-3 pb-3 border-b border-[hsl(var(--border))]"
+                                         onMouseDown={(e) => {
+                                             if ((e.target as HTMLElement).closest("button")) e.preventDefault();
+                                         }}>
                                         <button type="button" onClick={() => wrapSelection("**")} title="Bold (⌘B)"
                                                 className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
                                             <Bold className="h-4 w-4" />
@@ -737,7 +805,10 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                                                     className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
                                                 <Code2 className="h-4 w-4" />
                                             </button>
-                                            <div className="absolute left-0 top-full mt-1 w-32 bg-[hsl(var(--popover))] border border-[hsl(var(--border))] rounded shadow-lg z-50 overflow-hidden opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
+                                            <div className="absolute left-0 top-full mt-1 w-32 bg-[hsl(var(--popover))] border border-[hsl(var(--border))] rounded shadow-lg z-50 overflow-hidden opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity"
+                                                 onMouseDown={(e) => {
+                                                     if ((e.target as HTMLElement).closest("button")) e.preventDefault();
+                                                 }}>
                                                 <button type="button" onClick={() => insertCodeBlock("")}
                                                         className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
                                                     Plain
@@ -811,6 +882,10 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                                         <textarea ref={textareaRef}
                                                   value={form.content}
                                                   onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                                                  onSelect={updateSelectionFromTextarea}
+                                                  onKeyUp={updateSelectionFromTextarea}
+                                                  onMouseUp={updateSelectionFromTextarea}
+                                                  onFocus={updateSelectionFromTextarea}
                                                   placeholder={"# Start writing...\n\nUse markdown:\n**bold** (⌘B), *italic* (⌘I), __underline__ (⌘U)\n`code` (⌘`), [link](url) (⌘K)\n\n```language\ncode blocks\n```\n\n- Bullet lists with - or *\n1. Numbered lists with 1.\n\n> Quotes with >\n\n---\n\nPaste images directly!"}
                                                   rows={28} className="editor-textarea" spellCheck />
                                     </div>
@@ -905,3 +980,4 @@ function SidebarSection({ label, children }: { label: string; children: React.Re
         </div>
     );
 }
+

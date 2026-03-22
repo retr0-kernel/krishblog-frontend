@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { FileText, Eye, Users, TrendingUp, Plus, Mail, ArrowRight } from "lucide-react";
@@ -15,17 +15,54 @@ const card = (i: number) => ({
 });
 
 export default function AdminDashboard() {
-    const { token } = useAuth();
+    const { token, loading } = useAuth();
     const [stats, setStats] = useState<OverviewStats | null>(null);
     const [recentPosts, setRecentPosts] = useState<Post[]>([]);
     const [subStats, setSubStats] = useState<{ total: number; confirmed: number } | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+
+    const fetchDashboard = useCallback(async () => {
+        if (!token) return;
+        setIsLoading(true);
+        setLoadError(null);
+        try {
+            const [overviewResult, postsResult, subsResult] = await Promise.allSettled([
+                adminGetOverview(token, 7),
+                adminGetPosts(token, { per_page: 5 }),
+                adminGetSubscriberStats(token),
+            ]);
+            if (overviewResult.status === "fulfilled") setStats(overviewResult.value);
+            if (subsResult.status === "fulfilled") setSubStats(subsResult.value);
+            if (postsResult.status === "fulfilled") {
+                setRecentPosts(postsResult.value.posts ?? []);
+            } else {
+                setRecentPosts([]);
+                setLoadError("Failed to load recent posts.");
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    }, [token]);
+
+    useEffect(() => {
+        if (loading || !token) return;
+        fetchDashboard();
+    }, [loading, token, fetchDashboard]);
 
     useEffect(() => {
         if (!token) return;
-        adminGetOverview(token, 7).then(setStats).catch(() => {});
-        adminGetPosts(token, { per_page: 5 } as never).then((d) => setRecentPosts(d.posts ?? [])).catch(() => {});
-        adminGetSubscriberStats(token).then(setSubStats).catch(() => {});
-    }, [token]);
+        const handleVisibility = () => {
+            if (document.visibilityState === "visible") fetchDashboard();
+        };
+        const handleFocus = () => fetchDashboard();
+        window.addEventListener("focus", handleFocus);
+        document.addEventListener("visibilitychange", handleVisibility);
+        return () => {
+            window.removeEventListener("focus", handleFocus);
+            document.removeEventListener("visibilitychange", handleVisibility);
+        };
+    }, [token, fetchDashboard]);
 
     const topPosts = stats?.top_posts ?? [];
 
@@ -77,16 +114,24 @@ export default function AdminDashboard() {
                 <motion.div {...card(4)} className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg">
                     <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
                         <h2 className="text-sm font-sans font-semibold">Recent Posts</h2>
-                        <Link href="/admin/posts" className="text-xs font-sans text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--accent))] flex items-center gap-1 transition-colors">
-                            View all <ArrowRight className="h-3 w-3" />
-                        </Link>
+                        <div className="flex items-center gap-3">
+                            <Link href="/admin/posts" className="text-xs font-sans text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--accent))] flex items-center gap-1 transition-colors">
+                                View all <ArrowRight className="h-3 w-3" />
+                            </Link>
+                        </div>
                     </div>
                     <div className="divide-y divide-[hsl(var(--border))]">
-                        {recentPosts.length === 0 && (
+                        {isLoading && recentPosts.length === 0 && (
+                            <p className="px-5 py-6 text-sm font-sans text-[hsl(var(--muted-foreground))] text-center">Loading posts…</p>
+                        )}
+                        {loadError && recentPosts.length === 0 && (
+                            <p className="px-5 py-6 text-sm font-sans text-[hsl(var(--muted-foreground))] text-center">{loadError}</p>
+                        )}
+                        {!isLoading && !loadError && recentPosts.length === 0 && (
                             <p className="px-5 py-6 text-sm font-sans text-[hsl(var(--muted-foreground))] text-center">No posts yet</p>
                         )}
                         {recentPosts.map((post) => (
-                            <Link key={post.id} href={`/admin/posts/${post.id}`}
+                            <Link key={post.id} href={`/admin/posts/${post.slug}`}
                                   className="flex items-center gap-3 px-5 py-3 hover:bg-[hsl(var(--secondary))] transition-colors">
                                 <FileText className="h-4 w-4 flex-shrink-0 text-[hsl(var(--muted-foreground))]" />
                                 <div className="flex-1 min-w-0">
