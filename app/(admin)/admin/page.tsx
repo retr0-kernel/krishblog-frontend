@@ -15,7 +15,7 @@ const card = (i: number) => ({
 });
 
 export default function AdminDashboard() {
-    const { token, loading } = useAuth();
+    const { token, loading } = useAuth(); //auth
     const [stats, setStats] = useState<OverviewStats | null>(null);
     const [recentPosts, setRecentPosts] = useState<Post[]>([]);
     const [subStats, setSubStats] = useState<{ total: number; confirmed: number } | null>(null);
