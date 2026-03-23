@@ -128,7 +128,12 @@ export async function adminGetPostBySlug(token: string, slug: string): Promise<P
   if (!post) {
     throw new Error(`Post with slug "${slug}" not found`);
   }
-  return post;
+  // Attempt to fetch full post details for editor fields like content
+  try {
+    return await adminGetPost(token, post.id);
+  } catch {
+    return post;
+  }
 }
 
 export async function adminCreatePost(token: string, body: Partial<PostFormData>): Promise<Post> {

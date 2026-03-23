@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -9,30 +9,71 @@ export function TableOfContents() {
   const [items, setItems] = useState<TocItem[]>([]);
   const [active, setActive] = useState("");
   const [visible, setVisible] = useState(false);
+  const ignoreScrollUntilRef = useRef(0);
+  const pinnedActiveRef = useRef<string | null>(null);
+  const headingsRef = useRef<HTMLElement[]>([]);
+  const tocRef = useRef<TocItem[]>([]);
+  const headerOffsetRef = useRef(120);
+
+  const updateActiveFromScroll = useCallback(() => {
+    if (Date.now() < ignoreScrollUntilRef.current) {
+      const pinned = pinnedActiveRef.current;
+      if (pinned) setActive((prev) => (prev === pinned ? prev : pinned));
+      return;
+    }
+    const headings = headingsRef.current;
+    const toc = tocRef.current;
+    if (headings.length === 0 || toc.length === 0) return;
+    const targetY = window.scrollY + headerOffsetRef.current;
+    let current = toc[0]?.id ?? "";
+    for (let i = 0; i < headings.length; i += 1) {
+      const top = headings[i].getBoundingClientRect().top + window.scrollY;
+      if (top <= targetY) current = headings[i].id;
+      else break;
+    }
+    if (current) setActive((prev) => (prev === current ? prev : current));
+  }, []);
 
   useEffect(() => {
-    const headings = document.querySelectorAll(".prose-editorial h2, .prose-editorial h3");
+    const headings = Array.from(document.querySelectorAll<HTMLElement>(".prose-editorial h2, .prose-editorial h3"));
     const toc: TocItem[] = [];
     headings.forEach((el, i) => {
       const id = el.id || `heading-${i}`;
       el.id = id;
       toc.push({ id, text: el.textContent ?? "", level: el.tagName === "H2" ? 2 : 3 });
     });
+    headingsRef.current = headings;
+    tocRef.current = toc;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setItems(toc);
 
-    const observer = new IntersectionObserver(
-        (entries) => { entries.forEach((e) => { if (e.isIntersecting) setActive(e.target.id); }); },
-        { rootMargin: "-20% 0% -60% 0%" }
-    );
-    headings.forEach((h) => observer.observe(h));
-
-    const handleScroll = () => {
+    const updateVisibleFromScroll = () => {
       const pct = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
       setVisible(pct > 0.05 && toc.length > 1);
     };
+
+    const handleScroll = () => {
+      updateVisibleFromScroll();
+      updateActiveFromScroll();
+    };
+
+    const handleHashChange = () => {
+      const id = window.location.hash.replace("#", "");
+      if (id) setActive((prev) => (prev === id ? prev : id));
+    };
+
+    updateVisibleFromScroll();
+    updateActiveFromScroll();
     window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => { observer.disconnect(); window.removeEventListener("scroll", handleScroll); };
-  }, []);
+    window.addEventListener("resize", updateActiveFromScroll);
+    window.addEventListener("hashchange", handleHashChange);
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", updateActiveFromScroll);
+      window.removeEventListener("hashchange", handleHashChange);
+    };
+  }, [updateActiveFromScroll]);
 
   if (items.length < 2) return null;
 
@@ -46,6 +87,21 @@ export function TableOfContents() {
                 {items.map((item) => (
                     <li key={item.id}>
                       <a href={`#${item.id}`}
+                         onClick={(event) => {
+                           event.preventDefault();
+                           pinnedActiveRef.current = item.id;
+                           ignoreScrollUntilRef.current = Date.now() + 700;
+                           setActive((prev) => (prev === item.id ? prev : item.id));
+                           history.replaceState(null, "", `#${item.id}`);
+                           const target = document.getElementById(item.id);
+                           if (target) {
+                             target.scrollIntoView({ behavior: "smooth", block: "start" });
+                           }
+                           window.setTimeout(() => {
+                             pinnedActiveRef.current = null;
+                             updateActiveFromScroll();
+                           }, 700);
+                         }}
                          className={cn("block text-xs font-sans leading-tight transition-colors duration-150 truncate",
                              item.level === 3 && "pl-3",
                              active === item.id ? "text-[hsl(var(--accent))] font-medium" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]")}>
