@@ -9,7 +9,7 @@ import {
     Minus, ExternalLink
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { adminCreatePost, adminUpdatePost, adminGetSections } from "@/lib/api";
+import { adminCreatePost, adminUpdatePost, adminGetSections, adminGetPosts } from "@/lib/api";
 import type { Post, Section } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -319,8 +319,43 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
 
             setTimeout(() => setSaveState("idle"), 3000);
         } catch (err) {
+            // Backend might have created the post but failed during post-processing
+            // Try to verify if the post exists by checking with the backend
+            console.error("Save error:", err);
+            
+            // If this was a new post creation, check if it was actually created
+            if (!currentPost) {
+                try {
+                    const { posts } = await adminGetPosts(token, { q: form.slug, per_page: 1 });
+                    const createdPost = posts.find(p => p.slug === form.slug);
+                    
+                    if (createdPost) {
+                        // Post was created despite the error!
+                        console.warn("Post was created despite 500 error - backend post-processing issue");
+                        setCurrentPost(createdPost);
+                        
+                        // Clear the draft
+                        if (typeof window !== "undefined") {
+                            localStorage.removeItem(draftKey);
+                            localStorage.removeItem(`post-draft-new`);
+                        }
+                        
+                        // Update URL
+                        window.history.replaceState({}, '', `/admin/posts/${createdPost.slug}`);
+                        
+                        // Show a warning instead of error
+                        setSaveState("saved");
+                        alert("⚠️ Post was created but the server encountered an issue during post-processing. The post is saved, but some features (like analytics or notifications) may not have been updated. Please contact the backend team about request ID in the console.");
+                        
+                        setTimeout(() => setSaveState("idle"), 5000);
+                        return;
+                    }
+                } catch (verifyErr) {
+                    console.error("Failed to verify post creation:", verifyErr);
+                }
+            }
+            
             setSaveState("error");
-            console.error(err);
         } finally {
             setSaving(false);
         }
