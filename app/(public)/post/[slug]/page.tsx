@@ -112,7 +112,7 @@ export default async function PostPage({ params }: Props) {
                           .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
                           .replace(/\*(.+?)\*/g, "<em>$1</em>")
                           .replace(/`(.+?)`/g, '<code class="font-mono text-sm bg-[hsl(var(--muted))] px-1 py-0.5 rounded">$1</code>')
-                          .replace(/\[([^]]+?)\]\(([^\s)]+)\)/g, (_match, label, url) => {
+                          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) => {
                             return `<a href="${url}" class="text-[hsl(var(--accent))] underline underline-offset-2 hover:opacity-80" target="_blank" rel="noopener noreferrer">${label}</a>`;
                           });
                     };
@@ -155,13 +155,13 @@ export default async function PostPage({ params }: Props) {
                     lines.forEach((line, i) => {
                       const trimmed = line.trim();
 
-                      if (line.startsWith("```") || trimmed === "`") {
+                      if (line.startsWith("  ") || trimmed === "`") {
                         if (inCodeBlock) {
                           flushCodeBlock(i);
                         } else {
                           flushList(i);
                           inCodeBlock = true;
-                          codeBlockLang = line.startsWith("```") ? line.slice(3).trim() : "";
+                          codeBlockLang = line.startsWith("  ") ? line.slice(3).trim() : "";
                         }
                         return;
                       }
