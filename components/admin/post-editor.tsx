@@ -6,7 +6,7 @@ import {
     ChevronDown, AlertCircle, CheckCircle2, Loader2, Bell,
     Bold, Italic, Underline as UnderlineIcon, Heading1, Heading2, Heading3,
     Heading4, List, ListOrdered, Quote, Code, Code2, Link as LinkIcon, Image as ImageIcon,
-    Minus, ExternalLink
+    Minus, ExternalLink, RotateCcw
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { adminCreatePost, adminUpdatePost, adminGetSections, adminGetPosts } from "@/lib/api";
@@ -71,13 +71,10 @@ function MarkdownPreview({ content }: { content: string }) {
     };
 
     lines.forEach((line, i) => {
-        // Check for code block delimiters
         if (line.startsWith("```")) {
             if (inCodeBlock) {
-                // Closing code block
                 flushCodeBlock(i);
             } else {
-                // Opening code block
                 flushList(i);
                 inCodeBlock = true;
                 codeBlockLang = line.slice(3).trim();
@@ -85,27 +82,19 @@ function MarkdownPreview({ content }: { content: string }) {
             return;
         }
 
-        // If inside code block, collect lines
         if (inCodeBlock) {
             codeBlockLines.push(line);
             return;
         }
 
-        // Check for lists
         if (line.match(/^[-*]\s+(.+)/)) {
             const match = line.match(/^[-*]\s+(.+)/);
-            if (!inList) {
-                inList = true;
-                listType = "ul";
-            }
+            if (!inList) { inList = true; listType = "ul"; }
             if (match) listItems.push(match[1]);
             return;
         } else if (line.match(/^\d+\.\s+(.+)/)) {
             const match = line.match(/^\d+\.\s+(.+)/);
-            if (!inList) {
-                inList = true;
-                listType = "ol";
-            }
+            if (!inList) { inList = true; listType = "ol"; }
             if (match) listItems.push(match[1]);
             return;
         } else {
@@ -155,6 +144,22 @@ interface FormState {
     meta_desc: string;
 }
 
+function formFromPost(post?: Post): FormState {
+    return {
+        title: post?.title ?? "",
+        slug: post?.slug ?? "",
+        excerpt: post?.excerpt ?? "",
+        content: post?.content ?? "",
+        section_id: post?.section_id ?? "",
+        status: (post?.status ?? "draft") as "draft" | "published" | "archived",
+        is_featured: post?.is_featured ?? false,
+        cover_image: post?.cover_image ?? "",
+        cover_image_alt: post?.cover_image_alt ?? "",
+        meta_title: post?.meta_title ?? "",
+        meta_desc: post?.meta_desc ?? "",
+    };
+}
+
 export function PostEditor({ post: initialPost }: PostEditorProps) {
     const { token } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -170,88 +175,85 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
     const [notifyState, setNotifyState] = useState<"idle" | "sent" | "error">("idle");
     const [uploadingImage, setUploadingImage] = useState(false);
     const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
+    const [hasDraftRecovery, setHasDraftRecovery] = useState(false);
 
-    // Generate a unique key for localStorage based on post ID or "new"
     const draftKey = `post-draft-${currentPost?.id ?? "new"}`;
 
     const [form, setForm] = useState<FormState>(() => {
-        // Initialize from localStorage if available, otherwise use post data
-        if (typeof window !== "undefined") {
-            const savedDraft = localStorage.getItem(draftKey);
-            if (savedDraft) {
-                try {
-                    const parsed = JSON.parse(savedDraft);
-                    // Only use saved draft if it's newer than the post (or if it's a new post)
-                    if (!currentPost || parsed.savedAt > (currentPost.updated_at || currentPost.created_at)) {
-                        return parsed.form;
-                    }
-                } catch (e) {
-                    console.error("Failed to parse saved draft:", e);
+        // New post: restore from localStorage if available
+        if (!initialPost) {
+            if (typeof window !== "undefined") {
+                const savedDraft = localStorage.getItem("post-draft-new");
+                if (savedDraft) {
+                    try {
+                        const parsed = JSON.parse(savedDraft);
+                        if (parsed.form) return parsed.form;
+                    } catch { /* ignore */ }
                 }
             }
+            return formFromPost(undefined);
         }
-
-        return {
-            title: currentPost?.title ?? "",
-            slug: currentPost?.slug ?? "",
-            excerpt: currentPost?.excerpt ?? "",
-            content: currentPost?.content ?? "",
-            section_id: currentPost?.section_id ?? "",
-            status: (currentPost?.status ?? "draft") as "draft" | "published" | "archived",
-            is_featured: currentPost?.is_featured ?? false,
-            cover_image: currentPost?.cover_image ?? "",
-            cover_image_alt: currentPost?.cover_image_alt ?? "",
-            meta_title: currentPost?.meta_title ?? "",
-            meta_desc: currentPost?.meta_desc ?? "",
-        };
+        // Existing post: ALWAYS load from DB
+        return formFromPost(initialPost);
     });
 
-    const hydrateFormFromPost = useCallback((post: Post) => {
-        setForm({
-            title: post.title ?? "",
-            slug: post.slug ?? "",
-            excerpt: post.excerpt ?? "",
-            content: post.content ?? "",
-            section_id: post.section_id ?? "",
-            status: (post.status ?? "draft") as "draft" | "published" | "archived",
-            is_featured: post.is_featured ?? false,
-            cover_image: post.cover_image ?? "",
-            cover_image_alt: post.cover_image_alt ?? "",
-            meta_title: post.meta_title ?? "",
-            meta_desc: post.meta_desc ?? "",
-        });
-    }, []);
+    // For existing posts: check if there's a newer localStorage draft and surface it as a banner
+    useEffect(() => {
+        if (!initialPost) return;
+        const key = `post-draft-${initialPost.id}`;
+        if (typeof window === "undefined") return;
+        const savedDraft = localStorage.getItem(key);
+        if (!savedDraft) return;
+        try {
+            const parsed = JSON.parse(savedDraft);
+            const isNewer = parsed.savedAt > (initialPost.updated_at || initialPost.created_at);
+            const hasChanges =
+                parsed.form?.content !== initialPost.content ||
+                parsed.form?.title !== initialPost.title ||
+                parsed.form?.excerpt !== initialPost.excerpt;
+            if (isNewer && hasChanges) {
+                setHasDraftRecovery(true);
+            } else {
+                localStorage.removeItem(key);
+            }
+        } catch {
+            localStorage.removeItem(key);
+        }
+    }, [initialPost]);
 
+    // When initialPost arrives from API, sync form from DB
     useEffect(() => {
         if (!initialPost) return;
         setCurrentPost(initialPost);
-        if (typeof window !== "undefined") {
-            const nextDraftKey = `post-draft-${initialPost.id ?? "new"}`;
-            const savedDraft = localStorage.getItem(nextDraftKey);
-            if (savedDraft) {
-                try {
-                    const parsed = JSON.parse(savedDraft);
-                    if (parsed.savedAt > (initialPost.updated_at || initialPost.created_at)) {
-                        setForm(parsed.form);
-                        return;
-                    }
-                } catch (e) {
-                    console.error("Failed to parse saved draft:", e);
-                }
-            }
+        if (!hasDraftRecovery) {
+            setForm(formFromPost(initialPost));
         }
-        hydrateFormFromPost(initialPost);
-    }, [initialPost, hydrateFormFromPost]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialPost]); // intentionally exclude hasDraftRecovery
 
-    // Auto-save to localStorage whenever form changes
+    const restoreDraft = useCallback(() => {
+        if (typeof window === "undefined") return;
+        const savedDraft = localStorage.getItem(draftKey);
+        if (!savedDraft) return;
+        try {
+            const parsed = JSON.parse(savedDraft);
+            if (parsed.form) {
+                setForm(parsed.form);
+                setHasDraftRecovery(false);
+            }
+        } catch { /* ignore */ }
+    }, [draftKey]);
+
+    const discardDraft = useCallback(() => {
+        if (typeof window !== "undefined") localStorage.removeItem(draftKey);
+        setHasDraftRecovery(false);
+        if (currentPost) setForm(formFromPost(currentPost));
+    }, [draftKey, currentPost]);
+
+    // Auto-save to localStorage on every form change
     useEffect(() => {
-        if (typeof window !== "undefined") {
-            const draftData = {
-                form,
-                savedAt: new Date().toISOString(),
-            };
-            localStorage.setItem(draftKey, JSON.stringify(draftData));
-        }
+        if (typeof window === "undefined") return;
+        localStorage.setItem(draftKey, JSON.stringify({ form, savedAt: new Date().toISOString() }));
     }, [form, draftKey]);
 
     useEffect(() => {
@@ -291,24 +293,19 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                 savedPost = await adminUpdatePost(token, currentPost.id, payload);
             } else {
                 savedPost = await adminCreatePost(token, payload);
-                // Update the current post state with the newly created post
                 setCurrentPost(savedPost);
-                // Clear the draft for new posts
                 if (typeof window !== "undefined") {
-                    localStorage.removeItem(draftKey);
-                    // Update localStorage key for future saves
-                    localStorage.removeItem(`post-draft-new`);
+                    localStorage.removeItem("post-draft-new");
                 }
-                // Update the URL without navigation - use slug instead of ID
                 window.history.replaceState({}, '', `/admin/posts/${savedPost.slug}`);
             }
-            // Clear the localStorage draft after successful save
+
             if (typeof window !== "undefined") {
                 localStorage.removeItem(draftKey);
             }
+            setHasDraftRecovery(false);
             setSaveState("saved");
 
-            // Track the slug if the post is published
             if (savedPost.status === "published" && savedPost.slug) {
                 setPublishedSlug(savedPost.slug);
             } else {
@@ -316,37 +313,23 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
             }
 
             if (statusOverride) setForm((f) => ({ ...f, status: statusOverride as "draft" | "published" | "archived" }));
-
             setTimeout(() => setSaveState("idle"), 3000);
         } catch (err) {
-            // Backend might have created the post but failed during post-processing
-            // Try to verify if the post exists by checking with the backend
             console.error("Save error:", err);
-            
-            // If this was a new post creation, check if it was actually created
+
             if (!currentPost) {
                 try {
                     const { posts } = await adminGetPosts(token, { q: form.slug, per_page: 1 });
                     const createdPost = posts.find(p => p.slug === form.slug);
-                    
                     if (createdPost) {
-                        // Post was created despite the error!
-                        console.warn("Post was created despite 500 error - backend post-processing issue");
                         setCurrentPost(createdPost);
-                        
-                        // Clear the draft
                         if (typeof window !== "undefined") {
                             localStorage.removeItem(draftKey);
-                            localStorage.removeItem(`post-draft-new`);
+                            localStorage.removeItem("post-draft-new");
                         }
-                        
-                        // Update URL
                         window.history.replaceState({}, '', `/admin/posts/${createdPost.slug}`);
-                        
-                        // Show a warning instead of error
                         setSaveState("saved");
-                        alert("⚠️ Post was created but the server encountered an issue during post-processing. The post is saved, but some features (like analytics or notifications) may not have been updated. Please contact the backend team about request ID in the console.");
-                        
+                        alert("⚠️ Post was created but the server encountered an issue during post-processing. The post is saved.");
                         setTimeout(() => setSaveState("idle"), 5000);
                         return;
                     }
@@ -354,7 +337,7 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                     console.error("Failed to verify post creation:", verifyErr);
                 }
             }
-            
+
             setSaveState("error");
         } finally {
             setSaving(false);
@@ -381,20 +364,16 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
         return { start: textarea.selectionStart, end: textarea.selectionEnd };
     }, []);
 
-    // Markdown formatting helper functions
     const wrapSelection = useCallback((before: string, after: string = before) => {
         const textarea = textareaRef.current;
         if (!textarea) return;
-
         const selection = restoreSelection();
         if (!selection) return;
         const { start, end } = selection;
         const selectedText = form.content.substring(start, end);
         const beforeText = form.content.substring(0, start);
         const afterText = form.content.substring(end);
-
         if (selectedText) {
-            // Wrap selected text
             const newContent = beforeText + before + selectedText + after + afterText;
             setForm((f) => ({ ...f, content: newContent }));
             setTimeout(() => {
@@ -402,7 +381,6 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                 textarea.setSelectionRange(start + before.length, end + before.length);
             }, 0);
         } else {
-            // Insert markers and place cursor between them
             const newContent = beforeText + before + after + afterText;
             setForm((f) => ({ ...f, content: newContent }));
             setTimeout(() => {
@@ -415,7 +393,6 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
     const insertAtCursor = useCallback((text: string, offsetCursor: number = 0) => {
         const textarea = textareaRef.current;
         if (!textarea) return;
-
         const selection = restoreSelection();
         if (!selection) return;
         const { start } = selection;
@@ -423,7 +400,6 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
         const afterText = form.content.substring(start);
         const newContent = beforeText + text + afterText;
         setForm((f) => ({ ...f, content: newContent }));
-
         setTimeout(() => {
             textarea.focus();
             textarea.setSelectionRange(start + text.length + offsetCursor, start + text.length + offsetCursor);
@@ -433,59 +409,38 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
     const insertHeading = useCallback((level: number) => {
         const textarea = textareaRef.current;
         if (!textarea) return;
-
         const selection = restoreSelection();
         if (!selection) return;
         const { start } = selection;
         const lines = form.content.split("\n");
         let currentLine = 0;
         let charCount = 0;
-
-        // Find which line the cursor is on
         for (let i = 0; i < lines.length; i++) {
-            if (charCount + lines[i].length >= start) {
-                currentLine = i;
-                break;
-            }
-            charCount += lines[i].length + 1; // +1 for newline
+            if (charCount + lines[i].length >= start) { currentLine = i; break; }
+            charCount += lines[i].length + 1;
         }
-
         const prefix = "#".repeat(level) + " ";
-        const line = lines[currentLine];
-
-        // Remove existing heading prefix if any
-        const cleanLine = line.replace(/^#{1,6}\s+/, "");
+        const cleanLine = lines[currentLine].replace(/^#{1,6}\s+/, "");
         lines[currentLine] = prefix + cleanLine;
-
-        const newContent = lines.join("\n");
-        setForm((f) => ({ ...f, content: newContent }));
-
+        setForm((f) => ({ ...f, content: lines.join("\n") }));
         setTimeout(() => textarea.focus(), 0);
     }, [form.content, restoreSelection]);
 
     const insertList = useCallback((ordered: boolean) => {
         const textarea = textareaRef.current;
         if (!textarea) return;
-
         const selection = restoreSelection();
         if (!selection) return;
         const { start, end } = selection;
         const selectedText = form.content.substring(start, end);
-
         if (selectedText && selectedText.includes("\n")) {
-            // Multi-line selection: convert each line to list item
             const lines = selectedText.split("\n");
-            const listItems = lines.map((line, i) =>
-                ordered ? `${i + 1}. ${line}` : `- ${line}`
-            ).join("\n");
-
+            const listItems = lines.map((line, i) => ordered ? `${i + 1}. ${line}` : `- ${line}`).join("\n");
             const beforeText = form.content.substring(0, start);
             const afterText = form.content.substring(end);
-            const newContent = beforeText + listItems + afterText;
-            setForm((f) => ({ ...f, content: newContent }));
+            setForm((f) => ({ ...f, content: beforeText + listItems + afterText }));
             setTimeout(() => textarea.focus(), 0);
         } else {
-            // Single line or no selection: insert list item
             insertAtCursor(ordered ? "1. " : "- ", 0);
         }
     }, [form.content, insertAtCursor, restoreSelection]);
@@ -493,32 +448,25 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
     const insertCodeBlock = useCallback((language: string = "") => {
         const textarea = textareaRef.current;
         if (!textarea) return;
-
         const selection = restoreSelection();
         if (!selection) return;
         const { start, end } = selection;
         const selectedText = form.content.substring(start, end);
         const beforeText = form.content.substring(0, start);
         const afterText = form.content.substring(end);
-
         if (selectedText) {
-            // Wrap selected text in code block
             const codeBlock = `\`\`\`${language}\n${selectedText}\n\`\`\`\n`;
-            const newContent = beforeText + codeBlock + afterText;
-            setForm((f) => ({ ...f, content: newContent }));
+            setForm((f) => ({ ...f, content: beforeText + codeBlock + afterText }));
             setTimeout(() => {
                 textarea.focus();
-                const newPos = start + 3 + language.length + 1; // After ```language\n
-                textarea.setSelectionRange(newPos, newPos + selectedText.length);
+                textarea.setSelectionRange(start + 3 + language.length + 1, start + 3 + language.length + 1 + selectedText.length);
             }, 0);
         } else {
-            // Insert empty code block
             const codeBlock = `\`\`\`${language}\n\n\`\`\`\n`;
-            const newContent = beforeText + codeBlock + afterText;
-            setForm((f) => ({ ...f, content: newContent }));
+            setForm((f) => ({ ...f, content: beforeText + codeBlock + afterText }));
             setTimeout(() => {
                 textarea.focus();
-                const newPos = start + 3 + language.length + 1; // Position cursor inside code block
+                const newPos = start + 3 + language.length + 1;
                 textarea.setSelectionRange(newPos, newPos);
             }, 0);
         }
@@ -527,25 +475,17 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
     const handleImagePaste = useCallback(async (e: ClipboardEvent) => {
         const items = e.clipboardData?.items;
         if (!items) return;
-
         for (let i = 0; i < items.length; i++) {
             if (items[i].type.indexOf("image") !== -1) {
                 e.preventDefault();
                 const blob = items[i].getAsFile();
                 if (!blob) continue;
-
                 setUploadingImage(true);
                 try {
-                    // Create FormData and upload to your image hosting service
-                    // For now, we'll convert to base64 as a fallback
                     const reader = new FileReader();
                     reader.onload = (event) => {
                         const imageUrl = event.target?.result as string;
-                        // In production, you'd upload this to a CDN and get a URL
-                        // For now, insert a placeholder markdown
-                        const timestamp = Date.now();
-                        const imageName = `pasted-image-${timestamp}`;
-                        insertAtCursor(`![${imageName}](${imageUrl})`, 0);
+                        insertAtCursor(`![pasted-image-${Date.now()}](${imageUrl})`, 0);
                     };
                     reader.readAsDataURL(blob);
                 } catch (error) {
@@ -561,46 +501,24 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
     useEffect(() => {
         const textarea = textareaRef.current;
         if (!textarea) return;
-
         textarea.addEventListener("paste", handleImagePaste);
         return () => textarea.removeEventListener("paste", handleImagePaste);
     }, [handleImagePaste]);
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
-            // Don't handle if not focused on textarea
             if (document.activeElement !== textareaRef.current) {
-                // Only handle Cmd/Ctrl+S globally
-                if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-                    e.preventDefault();
-                    save();
-                }
+                if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); }
                 return;
             }
-
             const isMod = e.metaKey || e.ctrlKey;
-
-            if (isMod && e.key === "s") {
-                e.preventDefault();
-                save();
-            } else if (isMod && e.key === "b") {
-                e.preventDefault();
-                wrapSelection("**");
-            } else if (isMod && e.key === "i") {
-                e.preventDefault();
-                wrapSelection("*");
-            } else if (isMod && e.key === "u") {
-                e.preventDefault();
-                wrapSelection("__");
-            } else if (isMod && e.key === "k") {
-                e.preventDefault();
-                wrapSelection("[", "](url)");
-            } else if (isMod && e.key === "`") {
-                e.preventDefault();
-                wrapSelection("`");
-            }
+            if (isMod && e.key === "s") { e.preventDefault(); save(); }
+            else if (isMod && e.key === "b") { e.preventDefault(); wrapSelection("**"); }
+            else if (isMod && e.key === "i") { e.preventDefault(); wrapSelection("*"); }
+            else if (isMod && e.key === "u") { e.preventDefault(); wrapSelection("__"); }
+            else if (isMod && e.key === "k") { e.preventDefault(); wrapSelection("[", "](url)"); }
+            else if (isMod && e.key === "`") { e.preventDefault(); wrapSelection("`"); }
         };
-
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
     }, [save, wrapSelection]);
@@ -627,30 +545,40 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
         }
     }, [form.title, form.slug, form.excerpt]);
 
-    const clearDraft = useCallback(() => {
-        if (typeof window !== "undefined") {
-            localStorage.removeItem(draftKey);
-        }
-        // Reset form to original post data or empty values
-        setForm({
-            title: currentPost?.title ?? "",
-            slug: currentPost?.slug ?? "",
-            excerpt: currentPost?.excerpt ?? "",
-            content: currentPost?.content ?? "",
-            section_id: currentPost?.section_id ?? "",
-            status: (currentPost?.status ?? "draft") as "draft" | "published" | "archived",
-            is_featured: currentPost?.is_featured ?? false,
-            cover_image: currentPost?.cover_image ?? "",
-            cover_image_alt: currentPost?.cover_image_alt ?? "",
-            meta_title: currentPost?.meta_title ?? "",
-            meta_desc: currentPost?.meta_desc ?? "",
-        });
-    }, [draftKey, currentPost]);
-
-    const hasDraft = typeof window !== "undefined" && localStorage.getItem(draftKey) !== null;
-
     return (
         <div className="flex flex-col h-full">
+            {/* Draft recovery banner */}
+            <AnimatePresence>
+                {hasDraftRecovery && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                    >
+                        <div className="flex items-center justify-between px-6 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-sm font-sans">
+                            <span className="text-amber-700 dark:text-amber-400">
+                                You have unsaved changes from a previous session.
+                            </span>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={restoreDraft}
+                                    className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline"
+                                >
+                                    <RotateCcw className="h-3.5 w-3.5" /> Restore draft
+                                </button>
+                                <button
+                                    onClick={discardDraft}
+                                    className="text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:underline"
+                                >
+                                    Discard
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Toolbar */}
             <div className="flex items-center gap-3 px-6 py-3 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))]">
                 <h1 className="text-sm font-sans font-semibold flex-1 truncate">
@@ -677,19 +605,6 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                                      className="flex items-center gap-1 text-xs font-sans text-[hsl(var(--destructive))]">
                             <AlertCircle className="h-3.5 w-3.5" /> Save failed
                         </motion.span>
-                    )}
-                    {hasDraft && saveState === "idle" && (
-                        <motion.div initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
-                                    className="flex items-center gap-2">
-                            <span className="flex items-center gap-1 text-xs font-sans text-orange-600 dark:text-orange-400">
-                                <FileText className="h-3.5 w-3.5" /> Draft auto-saved
-                            </span>
-                            <button onClick={clearDraft}
-                                    title="Discard draft changes and revert to saved version"
-                                    className="text-xs font-sans text-muted-foreground hover:text-foreground underline">
-                                Clear
-                            </button>
-                        </motion.div>
                     )}
                 </AnimatePresence>
 
@@ -777,7 +692,6 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                                 </motion.div>
                             ) : (
                                 <motion.div key="editor" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                    {/* Formatting Toolbar */}
                                     <div className="flex flex-wrap items-center gap-1 mb-3 pb-3 border-b border-[hsl(var(--border))]"
                                          onMouseDown={(e) => {
                                              if ((e.target as HTMLElement).closest("button")) e.preventDefault();
@@ -844,50 +758,12 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                                                  onMouseDown={(e) => {
                                                      if ((e.target as HTMLElement).closest("button")) e.preventDefault();
                                                  }}>
-                                                <button type="button" onClick={() => insertCodeBlock("")}
-                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                                    Plain
-                                                </button>
-                                                <button type="button" onClick={() => insertCodeBlock("javascript")}
-                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                                    JavaScript
-                                                </button>
-                                                <button type="button" onClick={() => insertCodeBlock("typescript")}
-                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                                    TypeScript
-                                                </button>
-                                                <button type="button" onClick={() => insertCodeBlock("python")}
-                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                                    Python
-                                                </button>
-                                                <button type="button" onClick={() => insertCodeBlock("go")}
-                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                                    Go
-                                                </button>
-                                                <button type="button" onClick={() => insertCodeBlock("rust")}
-                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                                    Rust
-                                                </button>
-                                                <button type="button" onClick={() => insertCodeBlock("bash")}
-                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                                    Bash
-                                                </button>
-                                                <button type="button" onClick={() => insertCodeBlock("sql")}
-                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                                    SQL
-                                                </button>
-                                                <button type="button" onClick={() => insertCodeBlock("json")}
-                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                                    JSON
-                                                </button>
-                                                <button type="button" onClick={() => insertCodeBlock("html")}
-                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                                    HTML
-                                                </button>
-                                                <button type="button" onClick={() => insertCodeBlock("css")}
-                                                        className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                                    CSS
-                                                </button>
+                                                {["", "javascript", "typescript", "python", "go", "rust", "bash", "sql", "json", "html", "css"].map((lang) => (
+                                                    <button key={lang} type="button" onClick={() => insertCodeBlock(lang)}
+                                                            className="flex items-center w-full px-3 py-1.5 text-xs font-mono hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                                        {lang || "Plain"}
+                                                    </button>
+                                                ))}
                                             </div>
                                         </div>
                                         <button type="button" onClick={() => wrapSelection("[", "](url)")} title="Link (⌘K)"
