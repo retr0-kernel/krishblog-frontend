@@ -155,13 +155,13 @@ export default async function PostPage({ params }: Props) {
                     lines.forEach((line, i) => {
                       const trimmed = line.trim();
 
-                      if (line.startsWith("  ") || trimmed === "`") {
+                      if (line.startsWith("```") || trimmed === "`") {
                         if (inCodeBlock) {
                           flushCodeBlock(i);
                         } else {
                           flushList(i);
                           inCodeBlock = true;
-                          codeBlockLang = line.startsWith("  ") ? line.slice(3).trim() : "";
+                          codeBlockLang = line.startsWith("```") ? line.slice(3).trim() : "";
                         }
                         return;
                       }
