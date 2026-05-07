@@ -32,17 +32,17 @@ export default function AboutPage() {
 
                         {/* Social icons */}
                         <div className="flex items-center gap-2 justify-center lg:justify-start">
-                            <a href="mailto:hello@krishblog.com"
+                            <a href="mailto:krish22092003@gmail.com"
                                className="h-9 w-9 flex items-center justify-center rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--accent))] hover:border-[hsl(var(--accent))] transition-colors"
                                aria-label="Email">
                                 <Mail className="h-4 w-4" />
                             </a>
-                            <a href="https://github.com/krish" target="_blank" rel="noopener noreferrer"
+                            <a href="https://github.com/retr0-kernel" target="_blank" rel="noopener noreferrer"
                                className="h-9 w-9 flex items-center justify-center rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--accent))] hover:border-[hsl(var(--accent))] transition-colors"
                                aria-label="GitHub">
                                 <Github className="h-4 w-4" />
                             </a>
-                            <a href="https://twitter.com/krish" target="_blank" rel="noopener noreferrer"
+                            <a href="https://x.com/KrizzSrivastava" target="_blank" rel="noopener noreferrer"
                                className="h-9 w-9 flex items-center justify-center rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--accent))] hover:border-[hsl(var(--accent))] transition-colors"
                                aria-label="X / Twitter">
                                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
