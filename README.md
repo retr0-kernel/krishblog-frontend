@@ -43,4 +43,3 @@ lib/                ← api client, utils
 hooks/              ← useReadingProgress, useScrollAnalytics
 types/              ← TypeScript interfaces
 ```
-# krishblog-frontend
