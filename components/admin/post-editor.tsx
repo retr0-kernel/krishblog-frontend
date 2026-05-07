@@ -63,6 +63,7 @@ function MarkdownPreview({ content }: { content: string }) {
 
     const formatInline = (text: string) => {
         return text
+            .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="max-w-full h-auto rounded my-4" />')
             .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
             .replace(/\*(.+?)\*/g, "<em>$1</em>")
             .replace(/__(.+?)__/g, "<u>$1</u>")
@@ -115,6 +116,15 @@ function MarkdownPreview({ content }: { content: string }) {
             result.push(<hr key={i} className="my-6 border-[hsl(var(--border))]" />);
         } else if (line === "") {
             result.push(<br key={i} />);
+        } else if (line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)) {
+            const match = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+            if (match) {
+                result.push(
+                    <div key={i} className="my-6">
+                        <img src={match[2]} alt={match[1]} className="max-w-full h-auto rounded" />
+                    </div>
+                );
+            }
         } else {
             result.push(<p key={i} dangerouslySetInnerHTML={{ __html: formatInline(line) }} />);
         }

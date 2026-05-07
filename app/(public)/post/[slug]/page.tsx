@@ -109,6 +109,7 @@ export default async function PostPage({ params }: Props) {
 
                     const formatInline = (text: string) => {
                       return text
+                          .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="max-w-full h-auto rounded my-4" />')
                           .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
                           .replace(/\*(.+?)\*/g, "<em>$1</em>")
                           .replace(/`(.+?)`/g, '<code class="font-mono text-sm bg-[hsl(var(--muted))] px-1 py-0.5 rounded">$1</code>')
@@ -205,6 +206,18 @@ export default async function PostPage({ params }: Props) {
                         result.push(<hr key={i} className="my-8 border-[hsl(var(--border))]" />);
                       } else if (line === "") {
                         result.push(<br key={i} />);
+                      } else if (line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)) {
+                        const match = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+                        if (match) {
+                          result.push(
+                              <div key={i} className="my-8">
+                                <img src={match[2]} alt={match[1]} className="max-w-full h-auto rounded shadow-sm" />
+                                {match[1] && (
+                                    <p className="text-sm text-center text-[hsl(var(--muted-foreground))] mt-2 italic">{match[1]}</p>
+                                )}
+                              </div>
+                          );
+                        }
                       } else {
                         result.push(<p key={i} dangerouslySetInnerHTML={{ __html: formatInline(line) }} />);
                       }
