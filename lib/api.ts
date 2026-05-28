@@ -1,7 +1,7 @@
 import type {
   ApiResponse, Post, Section,
   LoginRequest, LoginResponse, User,
-  OverviewStats, PostFormData,
+  OverviewStats, PostFormData, Comment, ClapStats,
 } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
@@ -232,3 +232,74 @@ export async function adminGetSubscriberStats(token: string): Promise<{ total: n
     return { total: 0, confirmed: 0 };
   }
 }
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+
+export async function getComments(postId: string): Promise<Comment[]> {
+  try {
+    const r = await apiFetch<Comment[]>(`/v1/public/posts/${postId}/comments`);
+    return r.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function postComment(postId: string, body: { author_name: string; author_email: string; content: string }): Promise<void> {
+  await apiFetch(`/v1/public/posts/${postId}/comments`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function adminGetComments(token: string, approved?: boolean): Promise<Comment[]> {
+  const sp = new URLSearchParams();
+  if (approved !== undefined) sp.set("approved", String(approved));
+  try {
+    const r = await apiFetch<Comment[]>(`/v1/admin/comments?${sp}`, { token });
+    return r.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function adminApproveComment(token: string, id: string, isApproved: boolean): Promise<Comment> {
+  const r = await apiFetch<Comment>(`/v1/admin/comments/${id}/approve`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_approved: isApproved }),
+    token,
+  });
+  return r.data;
+}
+
+export async function adminReplyComment(token: string, id: string, content: string): Promise<Comment> {
+  const r = await apiFetch<Comment>(`/v1/admin/comments/${id}/reply`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+    token,
+  });
+  return r.data;
+}
+
+export async function adminDeleteComment(token: string, id: string): Promise<void> {
+  await apiFetch(`/v1/admin/comments/${id}`, { method: "DELETE", token });
+}
+
+// ── Claps ─────────────────────────────────────────────────────────────────────
+
+export async function getClapStats(postId: string, sessionId: string): Promise<ClapStats> {
+  try {
+    const r = await apiFetch<ClapStats>(`/v1/public/posts/${postId}/claps?session_id=${sessionId}`);
+    return r.data ?? { post_id: postId, total_claps: 0, user_claps: 0 };
+  } catch {
+    return { post_id: postId, total_claps: 0, user_claps: 0 };
+  }
+}
+
+export async function addClap(postId: string, sessionId: string, count: number): Promise<ClapStats> {
+  const r = await apiFetch<ClapStats>(`/v1/public/posts/${postId}/claps`, {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, count }),
+  });
+  return r.data;
+}
+

@@ -134,3 +134,28 @@ export interface DailyStat {
   page_views: number;
   unique_visitors: number;
 }
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+
+export interface Comment {
+  id: string;
+  post_id: string;
+  parent_id?: string;
+  author_name: string;
+  author_email?: string; // only in admin view
+  content: string;
+  is_approved: boolean;
+  is_admin_reply: boolean;
+  replies?: Comment[];
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Claps ─────────────────────────────────────────────────────────────────────
+
+export interface ClapStats {
+  post_id: string;
+  total_claps: number;
+  user_claps: number;
+}
+

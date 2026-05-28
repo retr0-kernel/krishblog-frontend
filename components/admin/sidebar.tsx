@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutDashboard, FileText, Layers, BarChart2, LogOut, ExternalLink, ChevronRight } from "lucide-react";
+import { LayoutDashboard, FileText, Layers, BarChart2, LogOut, ExternalLink, ChevronRight, MessageSquare } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ const nav = [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { href: "/admin/posts", label: "Posts", icon: FileText },
     { href: "/admin/sections", label: "Sections", icon: Layers },
+    { href: "/admin/comments", label: "Comments", icon: MessageSquare },
     { href: "/admin/analytics", label: "Analytics", icon: BarChart2 },
 ];
 
