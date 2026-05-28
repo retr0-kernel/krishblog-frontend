@@ -2,9 +2,13 @@
 
 import { useState, useCallback } from "react";
 import { useTheme } from "next-themes";
-import SyntaxHighlighter from "react-syntax-highlighter";
-import { atomOneDark, atomOneLight } from "react-syntax-highlighter/dist/esm/styles/hljs";
+import dynamic from "next/dynamic";
 import { Copy, Check } from "lucide-react";
+
+const SyntaxHighlighter = dynamic(
+  () => import("./_syntax-highlighter"),
+  { ssr: false, loading: () => null }
+);
 
 interface CodeBlockProps {
   code: string;
@@ -14,24 +18,21 @@ interface CodeBlockProps {
 export function CodeBlock({ code, language }: CodeBlockProps) {
   const { resolvedTheme } = useTheme();
   const [copied, setCopied] = useState(false);
+  const isDark = resolvedTheme === "dark";
+  const displayLang = language || "text";
+  const lineCount = code.split("\n").length;
 
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback
-    }
+    } catch { /* ignore */ }
   }, [code]);
 
-  const isDark = resolvedTheme === "dark";
-  const style = isDark ? atomOneDark : atomOneLight;
-  const displayLang = language || "text";
-
   return (
-    <div className="my-6 rounded-lg overflow-hidden border border-[hsl(var(--border))] group">
-      {/* Header bar */}
+    <div className="my-6 rounded-lg overflow-hidden border border-[hsl(var(--border))]">
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-[hsl(var(--muted))] border-b border-[hsl(var(--border))]">
         <span className="text-[11px] font-mono font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
           {displayLang}
@@ -42,44 +43,22 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
           aria-label="Copy code"
         >
           {copied ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-green-500" />
-              <span className="text-green-500">Copied!</span>
-            </>
+            <><Check className="h-3.5 w-3.5 text-green-500" /><span className="text-green-500">Copied!</span></>
           ) : (
-            <>
-              <Copy className="h-3.5 w-3.5" />
-              <span>Copy</span>
-            </>
+            <><Copy className="h-3.5 w-3.5" /><span>Copy</span></>
           )}
         </button>
       </div>
 
-      {/* Code content */}
+      {/* Code — SyntaxHighlighter loads async; plain <pre> shown on SSR/loading */}
       <div className="overflow-x-auto">
         <SyntaxHighlighter
+          code={code}
           language={displayLang}
-          style={style}
-          customStyle={{
-            margin: 0,
-            padding: "1.25rem",
-            fontSize: "0.875rem",
-            lineHeight: "1.6",
-            background: isDark ? "hsl(220 13% 11%)" : "hsl(220 14% 97%)",
-          }}
-          showLineNumbers={code.split("\n").length > 5}
-          lineNumberStyle={{
-            minWidth: "2.5em",
-            paddingRight: "1em",
-            color: isDark ? "hsl(220 13% 40%)" : "hsl(220 14% 65%)",
-            userSelect: "none",
-          }}
-          wrapLongLines={false}
-        >
-          {code}
-        </SyntaxHighlighter>
+          isDark={isDark}
+          showLineNumbers={lineCount > 5}
+        />
       </div>
     </div>
   );
 }
-
