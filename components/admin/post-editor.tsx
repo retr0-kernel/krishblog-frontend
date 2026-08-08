@@ -3,7 +3,7 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Save, Eye, EyeOff, Globe, FileText, Archive,
-    ChevronDown, AlertCircle, CheckCircle2, Loader2, Bell,
+    ChevronDown, AlertCircle, CheckCircle2, Loader2,
     Bold, Italic, Underline as UnderlineIcon, Heading1, Heading2, Heading3,
     Heading4, List, ListOrdered, Quote, Code, Code2, Link as LinkIcon, Image as ImageIcon,
     Minus, ExternalLink, RotateCcw
@@ -182,9 +182,8 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
     const [preview, setPreview] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saveState, setSaveState] = useState<"idle" | "saved" | "error">("idle");
+    const [saveMessage, setSaveMessage] = useState<string | null>(null);
     const [seoOpen, setSeoOpen] = useState(false);
-    const [notifying, setNotifying] = useState(false);
-    const [notifyState, setNotifyState] = useState<"idle" | "sent" | "error">("idle");
     const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
     const [hasDraftRecovery, setHasDraftRecovery] = useState(false);
 
@@ -279,12 +278,17 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
         }));
     };
 
+    const postStatus = currentPost?.status ?? form.status;
+
     const save = useCallback(async (statusOverride?: "draft" | "published" | "archived") => {
         if (!token || !form.title) return;
         setSaving(true);
         setSaveState("idle");
+        setSaveMessage(null);
 
+        const previousStatus = currentPost?.status ?? "draft";
         const effectiveStatus = (statusOverride ?? form.status) as "draft" | "published" | "archived";
+        const isFirstPublish = effectiveStatus === "published" && previousStatus === "draft";
 
         const payload = {
             title: form.title,
@@ -330,7 +334,29 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                 setPublishedSlug(null);
             }
 
-            setTimeout(() => setSaveState("idle"), 3000);
+            if (isFirstPublish && savedPost.status === "published") {
+                try {
+                    await adminNotifySubscribers(token, {
+                        post_title: savedPost.title,
+                        post_slug: savedPost.slug,
+                        post_summary: savedPost.excerpt ?? form.excerpt,
+                    });
+                    setSaveMessage("Published — subscribers notified");
+                } catch {
+                    setSaveMessage("Published — notification failed");
+                }
+            } else if (effectiveStatus === "published" && savedPost.status === "published") {
+                setSaveMessage(previousStatus === "archived" ? "Republished" : "Saved");
+            } else if (effectiveStatus === "archived") {
+                setSaveMessage("Archived");
+            } else {
+                setSaveMessage("Draft saved");
+            }
+
+            setTimeout(() => {
+                setSaveState("idle");
+                setSaveMessage(null);
+            }, 4000);
         } catch (err) {
             console.error("Save error:", err);
 
@@ -514,11 +540,19 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (document.activeElement !== textareaRef.current) {
-                if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(); }
+                if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+                    e.preventDefault();
+                    const status = currentPost?.status ?? form.status;
+                    save(status === "draft" ? "draft" : undefined);
+                }
                 return;
             }
             const isMod = e.metaKey || e.ctrlKey;
-            if (isMod && e.key === "s") { e.preventDefault(); save(); }
+            if (isMod && e.key === "s") {
+                e.preventDefault();
+                const status = currentPost?.status ?? form.status;
+                save(status === "draft" ? "draft" : undefined);
+            }
             else if (isMod && e.key === "b") { e.preventDefault(); wrapSelection("**"); }
             else if (isMod && e.key === "i") { e.preventDefault(); wrapSelection("*"); }
             else if (isMod && e.key === "u") { e.preventDefault(); wrapSelection("__"); }
@@ -527,27 +561,7 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [save, wrapSelection]);
-
-    const notifySubscribers = useCallback(async () => {
-        if (!token || !form.title || !form.slug) return;
-        setNotifying(true);
-        setNotifyState("idle");
-        try {
-            await adminNotifySubscribers(token, {
-                post_title: form.title,
-                post_slug: form.slug,
-                post_summary: form.excerpt,
-            });
-            setNotifyState("sent");
-            setTimeout(() => setNotifyState("idle"), 5000);
-        } catch {
-            setNotifyState("error");
-            setTimeout(() => setNotifyState("idle"), 4000);
-        } finally {
-            setNotifying(false);
-        }
-    }, [token, form.title, form.slug, form.excerpt]);
+    }, [save, wrapSelection, currentPost?.status, form.status]);
 
     return (
         <div className="flex flex-col h-full">
@@ -589,11 +603,11 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                     <span className="truncate">{form.title || "Untitled post"}</span>
                     <span className={cn(
                         "flex-shrink-0 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded",
-                        form.status === "published" ? "bg-green-500/15 text-green-600 dark:text-green-400"
-                            : form.status === "archived" ? "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"
+                        postStatus === "published" ? "bg-green-500/15 text-green-600 dark:text-green-400"
+                            : postStatus === "archived" ? "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"
                                 : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
                     )}>
-                        {form.status}
+                        {postStatus}
                     </span>
                 </h1>
 
@@ -602,7 +616,7 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                         <motion.div initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
                                     className="flex items-center gap-2">
                             <span className="flex items-center gap-1 text-xs font-sans text-green-600 dark:text-green-400">
-                                <CheckCircle2 className="h-3.5 w-3.5" /> Saved
+                                <CheckCircle2 className="h-3.5 w-3.5" /> {saveMessage ?? "Saved"}
                             </span>
                             {publishedSlug && (
                                 <a href={`/post/${publishedSlug}`} target="_blank" rel="noopener noreferrer"
@@ -631,57 +645,40 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                     {preview ? "Edit" : "Preview"}
                 </button>
 
-                <div className="flex items-stretch">
-                    {form.status !== "published" ? (
+                {postStatus === "draft" && (
+                    <>
+                        <button onClick={() => save("draft")} disabled={saving}
+                                className="flex items-center gap-1.5 h-8 px-3 text-xs font-sans rounded border border-[hsl(var(--border))] hover:bg-[hsl(var(--secondary))] transition-colors disabled:opacity-50">
+                            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                            Save draft
+                        </button>
                         <button onClick={() => save("published")} disabled={saving}
-                                className="flex items-center gap-1.5 h-8 px-3 text-xs font-sans bg-[hsl(var(--accent))] text-white rounded-l hover:opacity-90 transition-opacity disabled:opacity-50">
+                                className="flex items-center gap-1.5 h-8 px-3 text-xs font-sans bg-[hsl(var(--accent))] text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50">
                             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Globe className="h-3.5 w-3.5" />}
                             Publish
                         </button>
-                    ) : (
-                        <button onClick={() => save()} disabled={saving}
-                                className="flex items-center gap-1.5 h-8 px-3 text-xs font-sans bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-l hover:opacity-90 transition-opacity disabled:opacity-50">
+                    </>
+                )}
+
+                {postStatus === "published" && (
+                    <>
+                        <button onClick={() => save("published")} disabled={saving}
+                                className="flex items-center gap-1.5 h-8 px-3 text-xs font-sans bg-[hsl(var(--accent))] text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50">
                             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                             Save
                         </button>
-                    )}
-                    <div className="relative group">
-                        <button className="h-8 px-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-r border-l border-[hsl(var(--primary-foreground)/0.2)] hover:opacity-90 transition-opacity"
-                                aria-label="More publishing options">
-                            <ChevronDown className="h-3.5 w-3.5" />
+                        <button onClick={() => save("archived")} disabled={saving}
+                                className="flex items-center gap-1.5 h-8 px-3 text-xs font-sans rounded border border-[hsl(var(--border))] hover:bg-[hsl(var(--secondary))] transition-colors disabled:opacity-50">
+                            <Archive className="h-3.5 w-3.5" /> Archive
                         </button>
-                        <div className="absolute right-0 top-full mt-1 w-44 bg-[hsl(var(--popover))] border border-[hsl(var(--border))] rounded shadow-lg z-50 overflow-hidden opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
-                            <button onClick={() => save("draft")}
-                                    className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-sans hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                <FileText className="h-3.5 w-3.5" /> Save as draft
-                            </button>
-                            {form.status !== "published" && (
-                                <button onClick={() => save("published")}
-                                        className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-sans hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                    <Globe className="h-3.5 w-3.5 text-green-500" /> Publish now
-                                </button>
-                            )}
-                            <button onClick={() => save("archived")}
-                                    className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-sans hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                <Archive className="h-3.5 w-3.5" /> Archive
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                    </>
+                )}
 
-                {(currentPost?.status === "published" || form.status === "published") && (
-                    <button onClick={notifySubscribers} disabled={notifying}
-                            title="Send email notification to all subscribers"
-                            className={cn(
-                                "flex items-center gap-1.5 h-8 px-3 text-xs font-sans rounded border transition-colors disabled:opacity-50",
-                                notifyState === "sent" ? "border-green-500/40 bg-green-500/10 text-green-600"
-                                    : notifyState === "error" ? "border-red-500/40 bg-red-500/10 text-red-600"
-                                        : "border-[hsl(var(--border))] hover:bg-[hsl(var(--secondary))]"
-                            )}>
-                        {notifying ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : notifyState === "sent" ? <CheckCircle2 className="h-3.5 w-3.5" />
-                                : <Bell className="h-3.5 w-3.5" />}
-                        {notifyState === "sent" ? "Sent!" : notifyState === "error" ? "Failed" : "Notify subscribers"}
+                {postStatus === "archived" && (
+                    <button onClick={() => save("published")} disabled={saving}
+                            className="flex items-center gap-1.5 h-8 px-3 text-xs font-sans bg-[hsl(var(--accent))] text-white rounded hover:opacity-90 transition-opacity disabled:opacity-50">
+                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Globe className="h-3.5 w-3.5" />}
+                        Republish
                     </button>
                 )}
             </div>
@@ -829,20 +826,6 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                 {/* Sidebar */}
                 <aside className="w-64 flex-shrink-0 border-l border-[hsl(var(--border))] overflow-y-auto bg-[hsl(var(--card))]">
                     <div className="p-4 space-y-5">
-                        <SidebarSection label="Status">
-                            <div className="grid grid-cols-3 gap-1">
-                                {(["draft", "published", "archived"] as const).map((s) => (
-                                    <button key={s} onClick={() => setForm((f) => ({ ...f, status: s }))}
-                                            className={cn(
-                                                "py-1.5 text-[10px] font-sans font-semibold uppercase tracking-wider rounded transition-colors capitalize",
-                                                form.status === s ? "bg-[hsl(var(--accent))] text-white" : "bg-[hsl(var(--secondary))] hover:bg-[hsl(var(--muted))]"
-                                            )}>
-                                        {s}
-                                    </button>
-                                ))}
-                            </div>
-                        </SidebarSection>
-
                         <SidebarSection label="Section">
                             <select value={form.section_id} onChange={(e) => setForm((f) => ({ ...f, section_id: e.target.value }))}
                                     className="w-full h-8 px-2 text-xs font-sans bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded focus:outline-none focus:border-[hsl(var(--accent))] transition-colors">

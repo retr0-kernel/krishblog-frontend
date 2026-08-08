@@ -151,11 +151,3 @@ export interface Comment {
   updated_at: string;
 }
 
-// ── Claps ─────────────────────────────────────────────────────────────────────
-
-export interface ClapStats {
-  post_id: string;
-  total_claps: number;
-  user_claps: number;
-}
-

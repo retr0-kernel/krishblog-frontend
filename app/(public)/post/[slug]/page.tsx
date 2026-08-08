@@ -10,7 +10,6 @@ import { ShareButtons } from "@/components/reader/share-buttons";
 import { ScrollTracker } from "@/components/reader/scroll-tracker";
 import { PostContent } from "@/components/reader/post-content";
 import { Comments } from "@/components/reader/comments";
-import { Claps } from "@/components/reader/claps";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -106,7 +105,6 @@ export default async function PostPage({ params }: Props) {
             </div>
           )}
 
-          {/* Claps + Share row */}
           <div className="mt-16 pt-8 border-t border-[hsl(var(--border))] flex items-center justify-between">
             <ShareButtons title={post.title} url={postUrl} />
             {post.section_slug && (
@@ -117,15 +115,6 @@ export default async function PostPage({ params }: Props) {
             )}
           </div>
 
-          {/* Claps section */}
-          <div className="mt-12 pt-8 border-t border-[hsl(var(--border))] flex flex-col items-center gap-2">
-            <p className="text-sm font-sans text-[hsl(var(--muted-foreground))] mb-2">
-              Enjoyed this post? Show some love!
-            </p>
-            <Claps postId={post.id} />
-          </div>
-
-          {/* Comments section */}
           <Comments postId={post.id} />
         </div>
       </article>

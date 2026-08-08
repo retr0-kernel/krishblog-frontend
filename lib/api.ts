@@ -1,7 +1,7 @@
 import type {
   ApiResponse, Post, Section,
   LoginRequest, LoginResponse, User,
-  OverviewStats, PostFormData, Comment, ClapStats,
+  OverviewStats, PostFormData, Comment,
 } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
@@ -192,8 +192,34 @@ export async function adminDeleteSection(token: string, id: string): Promise<voi
 // ── Admin analytics ───────────────────────────────────────────────────────────
 
 export async function adminGetOverview(token: string, days = 30): Promise<OverviewStats> {
-  const r = await apiFetch<OverviewStats>(`/v1/admin/analytics/overview?days=${days}`, { token });
-  return r.data;
+  try {
+    const r = await apiFetch<OverviewStats>(`/v1/admin/analytics/overview?days=${days}`, { token });
+    return r.data ?? {
+      total_page_views: 0,
+      unique_visitors: 0,
+      avg_scroll_pct: 0,
+      avg_read_time_sec: 0,
+      top_posts: [],
+      top_referrers: [],
+      device_breakdown: [],
+      country_breakdown: [],
+      daily_views: [],
+      period: `last_${days}_days`,
+    };
+  } catch {
+    return {
+      total_page_views: 0,
+      unique_visitors: 0,
+      avg_scroll_pct: 0,
+      avg_read_time_sec: 0,
+      top_posts: [],
+      top_referrers: [],
+      device_breakdown: [],
+      country_breakdown: [],
+      daily_views: [],
+      period: `last_${days}_days`,
+    };
+  }
 }
 
 export async function adminGetPostStats(token: string, postId: string, days = 30) {
@@ -294,24 +320,5 @@ export async function adminReplyComment(token: string, id: string, content: stri
 
 export async function adminDeleteComment(token: string, id: string): Promise<void> {
   await apiFetch(`/v1/admin/comments/${id}`, { method: "DELETE", token });
-}
-
-// ── Claps ─────────────────────────────────────────────────────────────────────
-
-export async function getClapStats(postId: string, sessionId: string): Promise<ClapStats> {
-  try {
-    const r = await apiFetch<ClapStats>(`/v1/public/posts/${postId}/claps?session_id=${sessionId}`);
-    return r.data ?? { post_id: postId, total_claps: 0, user_claps: 0 };
-  } catch {
-    return { post_id: postId, total_claps: 0, user_claps: 0 };
-  }
-}
-
-export async function addClap(postId: string, sessionId: string, count: number): Promise<ClapStats> {
-  const r = await apiFetch<ClapStats>(`/v1/public/posts/${postId}/claps`, {
-    method: "POST",
-    body: JSON.stringify({ session_id: sessionId, count }),
-  });
-  return r.data;
 }
 

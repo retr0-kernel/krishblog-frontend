@@ -50,20 +50,6 @@ export default function AdminDashboard() {
         fetchDashboard();
     }, [loading, token, fetchDashboard]);
 
-    useEffect(() => {
-        if (!token) return;
-        const handleVisibility = () => {
-            if (document.visibilityState === "visible") fetchDashboard();
-        };
-        const handleFocus = () => fetchDashboard();
-        window.addEventListener("focus", handleFocus);
-        document.addEventListener("visibilitychange", handleVisibility);
-        return () => {
-            window.removeEventListener("focus", handleFocus);
-            document.removeEventListener("visibilitychange", handleVisibility);
-        };
-    }, [token, fetchDashboard]);
-
     const topPosts = stats?.top_posts ?? [];
 
     const metrics = [
