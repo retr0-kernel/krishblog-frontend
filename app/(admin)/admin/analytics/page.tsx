@@ -25,17 +25,23 @@ export default function AdminAnalyticsPage() {
 
     useEffect(() => {
         if (!token) return;
-        setLoading(true);
+        let cancelled = false;
         Promise.all([
             adminGetOverview(token, days),
             adminGetSubscriberStats(token),
         ])
             .then(([overview, subs]) => {
+                if (cancelled) return;
                 setStats(overview);
                 setSubStats(subs);
             })
             .catch(() => {})
-            .finally(() => setLoading(false));
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, [token, days]);
 
     // Safely coerce all nullable arrays

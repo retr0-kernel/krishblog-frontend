@@ -1,14 +1,17 @@
 "use client";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Moon, Sun, Monitor } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+function useIsMounted() {
+    return useSyncExternalStore(() => () => {}, () => true, () => false);
+}
+
 export function ThemeToggle({ className }: { className?: string }) {
     const { theme, setTheme } = useTheme();
-    const [mounted, setMounted] = useState(false);
-    useEffect(() => setMounted(true), []);
+    const mounted = useIsMounted();
 
     if (!mounted) return <div className={cn("h-9 w-9", className)} />;
 
@@ -48,8 +51,7 @@ export function ThemeToggle({ className }: { className?: string }) {
 
 export function ThemePicker() {
     const { theme, setTheme } = useTheme();
-    const [mounted, setMounted] = useState(false);
-    useEffect(() => setMounted(true), []);
+    const mounted = useIsMounted();
     if (!mounted) return null;
 
     const options = [

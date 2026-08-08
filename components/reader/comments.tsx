@@ -200,7 +200,7 @@ export function Comments({ postId }: CommentsProps) {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 
-  const fetchComments = useCallback(async () => {
+  const reloadComments = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/v1/public/posts/${postId}/comments`);
       const data = await res.json();
@@ -209,7 +209,21 @@ export function Comments({ postId }: CommentsProps) {
     setLoading(false);
   }, [postId]);
 
-  useEffect(() => { fetchComments(); }, [fetchComments]);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`${API_URL}/v1/public/posts/${postId}/comments`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.success) setComments(data.data ?? []);
+      } catch {}
+      if (!cancelled) setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [postId]);
 
   const total = comments.length;
 
@@ -234,7 +248,7 @@ export function Comments({ postId }: CommentsProps) {
           <h3 className="text-sm font-san font-semibold text-[hsl(var(--foreground))] mb-4 uppercase tracking-wider">
             Leave a Comment
           </h3>
-          <CommentForm postId={postId} onSuccess={fetchComments} />
+          <CommentForm postId={postId} onSuccess={reloadComments} />
         </div>
       )}
 

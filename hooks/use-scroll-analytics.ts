@@ -5,9 +5,10 @@ import { getOrCreateSessionId } from "@/lib/utils";
 
 export function useScrollAnalytics(postId?: string) {
   const milestones = useRef(new Set<number>());
-  const startTime = useRef(Date.now());
+  const startTime = useRef(0);
 
   useEffect(() => {
+    startTime.current = Date.now();
     const sessionId = getOrCreateSessionId();
     const path = window.location.pathname;
 

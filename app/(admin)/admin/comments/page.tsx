@@ -199,22 +199,34 @@ export default function AdminCommentsPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
 
-  const fetchComments = useCallback(async () => {
+  const reloadComments = useCallback(async () => {
     if (!token) return;
-    setLoading(true);
     const approved = filter === "all" ? undefined : filter === "approved";
     const data = await adminGetComments(token, approved);
     setComments(data);
     setLoading(false);
   }, [token, filter]);
 
-  useEffect(() => { fetchComments(); }, [fetchComments]);
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    void (async () => {
+      const approved = filter === "all" ? undefined : filter === "approved";
+      const data = await adminGetComments(token, approved);
+      if (cancelled) return;
+      setComments(data);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, filter]);
 
   const handleApprove = async (id: string, val: boolean) => {
     if (!token) return;
     try {
       await adminApproveComment(token, id, val);
-      fetchComments();
+      reloadComments();
     } catch {}
   };
 
@@ -222,7 +234,7 @@ export default function AdminCommentsPage() {
     if (!token || !confirm("Delete this comment?")) return;
     try {
       await adminDeleteComment(token, id);
-      fetchComments();
+      reloadComments();
     } catch {}
   };
 
@@ -247,7 +259,7 @@ export default function AdminCommentsPage() {
           </p>
         </div>
         <button
-          onClick={fetchComments}
+          onClick={reloadComments}
           className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-[hsl(var(--border))] hover:bg-[hsl(var(--secondary))] transition-colors font-sans text-[hsl(var(--muted-foreground))]"
         >
           <RefreshCw className="h-4 w-4" /> Refresh
@@ -306,7 +318,7 @@ export default function AdminCommentsPage() {
         <ReplyModal
           commentId={replyingTo}
           onClose={() => setReplyingTo(null)}
-          onReplied={fetchComments}
+          onReplied={reloadComments}
         />
       )}
     </div>

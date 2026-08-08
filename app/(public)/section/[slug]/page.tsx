@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { motion } from "framer-motion";
 import { getSection, getPosts } from "@/lib/api";
 import { PostCard } from "@/components/shared/post-card";
 

@@ -15,24 +15,47 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function readStoredAuth() {
+    if (typeof window === "undefined") {
+        return { token: null as string | null, user: null as User | null };
+    }
+    const { token, user } = getAuth();
+    return { token, user };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();
-    const [user, setUser] = useState<User | null>(null);
-    const [token, setToken] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState<User | null>(() => readStoredAuth().user);
+    const [token, setToken] = useState<string | null>(() => readStoredAuth().token);
+    const [loading, setLoading] = useState(() => {
+        if (typeof window === "undefined") return false;
+        return !!readStoredAuth().token;
+    });
 
     useEffect(() => {
-        const { token: t, user: u } = getAuth();
-        if (t && u) {
-            setToken(t);
-            setUser(u);
-            getMe(t)
-                .then((freshUser) => { setUser(freshUser); setAuth({ token: t, user: freshUser }); })
-                .catch(() => { clearAuth(); setToken(null); setUser(null); })
-                .finally(() => setLoading(false));
-        } else {
-            setLoading(false);
-        }
+        const { token: t } = readStoredAuth();
+        if (!t) return;
+
+        let cancelled = false;
+        getMe(t)
+            .then((freshUser) => {
+                if (cancelled) return;
+                setUser(freshUser);
+                setAuth({ token: t, user: freshUser });
+            })
+            .catch(() => {
+                if (cancelled) return;
+                clearAuth();
+                setToken(null);
+                setUser(null);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const login = useCallback(async (email: string, password: string) => {

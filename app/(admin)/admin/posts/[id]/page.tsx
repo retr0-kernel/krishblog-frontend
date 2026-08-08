@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { use } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { adminGetPostBySlug } from "@/lib/api";
 import { PostEditor } from "@/components/admin/post-editor";
@@ -33,9 +34,9 @@ export default function EditPostPage({ params }: { params: Promise<{ id: string 
     if (error) return (
         <div className="p-8 text-center">
             <div className="text-[hsl(var(--destructive))] font-sans mb-4">{error}</div>
-            <a href="/admin/posts" className="text-sm text-[hsl(var(--accent))] hover:underline">
+            <Link href="/admin/posts" className="text-sm text-[hsl(var(--accent))] hover:underline">
                 ← Back to posts
-            </a>
+            </Link>
         </div>
     );
     if (!post) return null;
