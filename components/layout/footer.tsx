@@ -5,7 +5,7 @@ export function Footer() {
   return (
       <footer className="border-t border-[hsl(var(--border))] mt-24">
         <div className="max-w-6xl mx-auto px-6 py-16">
-          <div className="grid gap-12 mb-12" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+          <div className="grid gap-12 mb-12 md:grid-cols-2 lg:grid-cols-3">
             {/* Brand */}
             <div className="space-y-3">
               <p className="text-xl font-bold" style={{ fontFamily: '"Playfair Display", serif' }}>
@@ -30,7 +30,7 @@ export function Footer() {
             </div>
 
             {/* Subscribe */}
-            <div className="space-y-4">
+            <div className="space-y-4 md:col-span-2 lg:col-span-1">
               <p className="text-xs font-sans font-semibold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
                 Stay updated
               </p>
