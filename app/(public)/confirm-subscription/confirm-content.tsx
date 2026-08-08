@@ -10,7 +10,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 function ConfirmContent() {
     const searchParams = useSearchParams();
     const token = searchParams.get("token");
-    const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
+    const [status, setStatus] = useState<"loading" | "success" | "already" | "expired" | "error">("loading");
     const [message, setMessage] = useState("");
 
     useEffect(() => {
@@ -25,8 +25,17 @@ function ConfirmContent() {
             .then(async (res) => {
                 const data = await res.json().catch(() => ({}));
                 if (res.ok) {
-                    setStatus("success");
-                    setMessage("Your subscription is confirmed. You'll hear from me when something new is published.");
+                    const msg = data.data?.message ?? "";
+                    if (msg.toLowerCase().includes("already")) {
+                        setStatus("already");
+                        setMessage("You're already subscribed — no action needed.");
+                    } else {
+                        setStatus("success");
+                        setMessage("Your subscription is confirmed. You'll hear from me when something new is published.");
+                    }
+                } else if (data.error?.code === "TOKEN_EXPIRED") {
+                    setStatus("expired");
+                    setMessage("This confirmation link has expired. Please subscribe again to get a fresh link.");
                 } else {
                     setStatus("error");
                     setMessage(data.error?.message ?? "This confirmation link is invalid or has already been used.");
@@ -58,6 +67,34 @@ function ConfirmContent() {
                             </div>
                             <Link href="/" className="inline-flex items-center gap-2 text-sm font-sans font-medium text-[hsl(var(--accent))] hover:underline underline-offset-4">
                                 Back to the blog →
+                            </Link>
+                        </div>
+                    )}
+                    {status === "already" && (
+                        <div className="space-y-6">
+                            <div className="h-16 w-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+                                <CheckCircle2 className="h-8 w-8 text-green-500" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-bold mb-3" style={{ fontFamily: '"Playfair Display", serif' }}>Already subscribed</h1>
+                                <p className="font-sans text-[hsl(var(--muted-foreground))] leading-relaxed">{message}</p>
+                            </div>
+                            <Link href="/" className="inline-flex items-center gap-2 text-sm font-sans font-medium text-[hsl(var(--accent))] hover:underline underline-offset-4">
+                                Back to the blog →
+                            </Link>
+                        </div>
+                    )}
+                    {status === "expired" && (
+                        <div className="space-y-6">
+                            <div className="h-16 w-16 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto">
+                                <XCircle className="h-8 w-8 text-amber-500" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-bold mb-3" style={{ fontFamily: '"Playfair Display", serif' }}>Link expired</h1>
+                                <p className="font-sans text-[hsl(var(--muted-foreground))] leading-relaxed">{message}</p>
+                            </div>
+                            <Link href="/about" className="inline-flex items-center gap-2 text-sm font-sans font-medium text-[hsl(var(--accent))] hover:underline underline-offset-4">
+                                Subscribe again →
                             </Link>
                         </div>
                     )}
