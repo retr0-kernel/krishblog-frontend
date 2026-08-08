@@ -9,9 +9,11 @@ import {
     Minus, ExternalLink, RotateCcw
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { adminCreatePost, adminUpdatePost, adminGetSections, adminGetPosts } from "@/lib/api";
+import { adminCreatePost, adminUpdatePost, adminUpdatePostStatus, adminGetSections, adminGetPosts, adminNotifySubscribers } from "@/lib/api";
 import type { Post, Section } from "@/types";
 import { cn } from "@/lib/utils";
+import { CoverImageField } from "@/components/admin/cover-image-field";
+import { imagesRepoMarkdown } from "@/lib/images-repo";
 
 function MarkdownPreview({ content }: { content: string }) {
     const lines = content.split("\n");
@@ -183,7 +185,6 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
     const [seoOpen, setSeoOpen] = useState(false);
     const [notifying, setNotifying] = useState(false);
     const [notifyState, setNotifyState] = useState<"idle" | "sent" | "error">("idle");
-    const [uploadingImage, setUploadingImage] = useState(false);
     const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
     const [hasDraftRecovery, setHasDraftRecovery] = useState(false);
 
@@ -278,10 +279,12 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
         }));
     };
 
-    const save = useCallback(async (statusOverride?: string) => {
+    const save = useCallback(async (statusOverride?: "draft" | "published" | "archived") => {
         if (!token || !form.title) return;
         setSaving(true);
         setSaveState("idle");
+
+        const effectiveStatus = (statusOverride ?? form.status) as "draft" | "published" | "archived";
 
         const payload = {
             title: form.title,
@@ -289,7 +292,6 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
             excerpt: form.excerpt,
             content: form.content,
             section_id: form.section_id || undefined,
-            status: (statusOverride as "draft" | "published" | "archived") ?? form.status,
             is_featured: form.is_featured,
             cover_image: form.cover_image || undefined,
             cover_image_alt: form.cover_image_alt || undefined,
@@ -301,14 +303,20 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
             let savedPost: Post;
             if (currentPost) {
                 savedPost = await adminUpdatePost(token, currentPost.id, payload);
+                if (effectiveStatus !== savedPost.status) {
+                    savedPost = await adminUpdatePostStatus(token, currentPost.id, effectiveStatus);
+                }
             } else {
-                savedPost = await adminCreatePost(token, payload);
+                savedPost = await adminCreatePost(token, { ...payload, status: effectiveStatus });
                 setCurrentPost(savedPost);
                 if (typeof window !== "undefined") {
                     localStorage.removeItem("post-draft-new");
                 }
                 window.history.replaceState({}, '', `/admin/posts/${savedPost.slug}`);
             }
+
+            setCurrentPost(savedPost);
+            setForm(formFromPost(savedPost));
 
             if (typeof window !== "undefined") {
                 localStorage.removeItem(draftKey);
@@ -322,7 +330,6 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                 setPublishedSlug(null);
             }
 
-            if (statusOverride) setForm((f) => ({ ...f, status: statusOverride as "draft" | "published" | "archived" }));
             setTimeout(() => setSaveState("idle"), 3000);
         } catch (err) {
             console.error("Save error:", err);
@@ -482,27 +489,16 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
         }
     }, [form.content, restoreSelection]);
 
-    const handleImagePaste = useCallback(async (e: ClipboardEvent) => {
+    const handleImagePaste = useCallback((e: ClipboardEvent) => {
         const items = e.clipboardData?.items;
         if (!items) return;
         for (let i = 0; i < items.length; i++) {
             if (items[i].type.indexOf("image") !== -1) {
                 e.preventDefault();
-                const blob = items[i].getAsFile();
-                if (!blob) continue;
-                setUploadingImage(true);
-                try {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        const imageUrl = event.target?.result as string;
-                        insertAtCursor(`![pasted-image-${Date.now()}](${imageUrl})`, 0);
-                    };
-                    reader.readAsDataURL(blob);
-                } catch (error) {
-                    console.error("Image paste failed:", error);
-                } finally {
-                    setUploadingImage(false);
-                }
+                insertAtCursor(
+                    "\n<!-- Add image to krishblog-images repo, then use: -->\n" + imagesRepoMarkdown("path/to/image.png", "description") + "\n",
+                    0
+                );
                 break;
             }
         }
@@ -534,17 +530,15 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
     }, [save, wrapSelection]);
 
     const notifySubscribers = useCallback(async () => {
-        if (!form.title || !form.slug) return;
+        if (!token || !form.title || !form.slug) return;
         setNotifying(true);
         setNotifyState("idle");
         try {
-            const res = await fetch("/api/admin/notify", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ title: form.title, slug: form.slug, summary: form.excerpt }),
+            await adminNotifySubscribers(token, {
+                post_title: form.title,
+                post_slug: form.slug,
+                post_summary: form.excerpt,
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error ?? "Failed");
             setNotifyState("sent");
             setTimeout(() => setNotifyState("idle"), 5000);
         } catch {
@@ -553,7 +547,7 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
         } finally {
             setNotifying(false);
         }
-    }, [form.title, form.slug, form.excerpt]);
+    }, [token, form.title, form.slug, form.excerpt]);
 
     return (
         <div className="flex flex-col h-full">
@@ -591,8 +585,16 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
 
             {/* Toolbar */}
             <div className="flex items-center gap-3 px-6 py-3 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))]">
-                <h1 className="text-sm font-sans font-semibold flex-1 truncate">
-                    {form.title || "Untitled post"}
+                <h1 className="text-sm font-sans font-semibold flex-1 truncate flex items-center gap-2 min-w-0">
+                    <span className="truncate">{form.title || "Untitled post"}</span>
+                    <span className={cn(
+                        "flex-shrink-0 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded",
+                        form.status === "published" ? "bg-green-500/15 text-green-600 dark:text-green-400"
+                            : form.status === "archived" ? "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"
+                                : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                    )}>
+                        {form.status}
+                    </span>
                 </h1>
 
                 <AnimatePresence>
@@ -630,25 +632,35 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                 </button>
 
                 <div className="flex items-stretch">
-                    <button onClick={() => save()} disabled={saving}
-                            className="flex items-center gap-1.5 h-8 px-3 text-xs font-sans bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-l hover:opacity-90 transition-opacity disabled:opacity-50">
-                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                        Save draft
-                    </button>
+                    {form.status !== "published" ? (
+                        <button onClick={() => save("published")} disabled={saving}
+                                className="flex items-center gap-1.5 h-8 px-3 text-xs font-sans bg-[hsl(var(--accent))] text-white rounded-l hover:opacity-90 transition-opacity disabled:opacity-50">
+                            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Globe className="h-3.5 w-3.5" />}
+                            Publish
+                        </button>
+                    ) : (
+                        <button onClick={() => save()} disabled={saving}
+                                className="flex items-center gap-1.5 h-8 px-3 text-xs font-sans bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-l hover:opacity-90 transition-opacity disabled:opacity-50">
+                            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                            Save
+                        </button>
+                    )}
                     <div className="relative group">
                         <button className="h-8 px-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] rounded-r border-l border-[hsl(var(--primary-foreground)/0.2)] hover:opacity-90 transition-opacity"
                                 aria-label="More publishing options">
                             <ChevronDown className="h-3.5 w-3.5" />
                         </button>
-                        <div className="absolute right-0 top-full mt-1 w-40 bg-[hsl(var(--popover))] border border-[hsl(var(--border))] rounded shadow-lg z-50 overflow-hidden opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
-                            <button onClick={() => save("published")}
-                                    className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-sans hover:bg-[hsl(var(--secondary))] text-left transition-colors">
-                                <Globe className="h-3.5 w-3.5 text-green-500" /> Publish now
-                            </button>
+                        <div className="absolute right-0 top-full mt-1 w-44 bg-[hsl(var(--popover))] border border-[hsl(var(--border))] rounded shadow-lg z-50 overflow-hidden opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
                             <button onClick={() => save("draft")}
                                     className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-sans hover:bg-[hsl(var(--secondary))] text-left transition-colors">
                                 <FileText className="h-3.5 w-3.5" /> Save as draft
                             </button>
+                            {form.status !== "published" && (
+                                <button onClick={() => save("published")}
+                                        className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-sans hover:bg-[hsl(var(--secondary))] text-left transition-colors">
+                                    <Globe className="h-3.5 w-3.5 text-green-500" /> Publish now
+                                </button>
+                            )}
                             <button onClick={() => save("archived")}
                                     className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-sans hover:bg-[hsl(var(--secondary))] text-left transition-colors">
                                 <Archive className="h-3.5 w-3.5" /> Archive
@@ -780,7 +792,7 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                                                 className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
                                             <LinkIcon className="h-4 w-4" />
                                         </button>
-                                        <button type="button" onClick={() => insertAtCursor("![alt text](image-url)", -12)} title="Image"
+                                        <button type="button" onClick={() => insertAtCursor(imagesRepoMarkdown("path/to/image.png", "alt text"), 0)} title="Image from krishblog-images repo"
                                                 className="h-8 w-8 flex items-center justify-center rounded hover:bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
                                             <ImageIcon className="h-4 w-4" />
                                         </button>
@@ -789,11 +801,6 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                                             <Minus className="h-4 w-4" />
                                         </button>
 
-                                        {uploadingImage && (
-                                            <span className="text-xs font-sans text-[hsl(var(--muted-foreground))] flex items-center gap-1 ml-2">
-                                                <Loader2 className="h-3 w-3 animate-spin" /> Uploading...
-                                            </span>
-                                        )}
                                     </div>
 
                                     <div className="relative">
@@ -807,11 +814,11 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                                                   onKeyUp={updateSelectionFromTextarea}
                                                   onMouseUp={updateSelectionFromTextarea}
                                                   onFocus={updateSelectionFromTextarea}
-                                                  placeholder={"# Start writing...\n\nUse markdown:\n**bold** (⌘B), *italic* (⌘I), __underline__ (⌘U)\n`code` (⌘`), [link](url) (⌘K)\n\n```language\ncode blocks\n```\n\n- Bullet lists with - or *\n1. Numbered lists with 1.\n\n> Quotes with >\n\n---\n\nPaste images directly!"}
+                                                  placeholder={"# Start writing...\n\nUse markdown:\n**bold** (⌘B), *italic* (⌘I), __underline__ (⌘U)\n`code` (⌘`), [link](url) (⌘K)\n\n```language\ncode blocks\n```\n\n- Bullet lists with - or *\n1. Numbered lists with 1.\n\n> Quotes with >\n\n---\n\nImages: add to krishblog-images repo, then ![alt](path/to/image.png)"}
                                                   rows={28} className="editor-textarea" spellCheck />
                                     </div>
                                     <p className="text-[10px] font-sans text-[hsl(var(--muted-foreground))] mt-2">
-                                        {form.content.split(/\s+/).filter(Boolean).length} words · ⌘S to save · Paste images to embed · Use ``` for code blocks
+                                        {form.content.split(/\s+/).filter(Boolean).length} words · ⌘S to save · Images from krishblog-images repo
                                     </p>
                                 </motion.div>
                             )}
@@ -854,12 +861,12 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                         </SidebarSection>
 
                         <SidebarSection label="Cover image">
-                            <input value={form.cover_image} onChange={(e) => setForm((f) => ({ ...f, cover_image: e.target.value }))}
-                                   placeholder="https://…"
-                                   className="w-full h-8 px-2 text-xs font-sans bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded focus:outline-none focus:border-[hsl(var(--accent))] transition-colors mb-1.5" />
-                            <input value={form.cover_image_alt} onChange={(e) => setForm((f) => ({ ...f, cover_image_alt: e.target.value }))}
-                                   placeholder="Alt text"
-                                   className="w-full h-8 px-2 text-xs font-sans bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded focus:outline-none focus:border-[hsl(var(--accent))] transition-colors" />
+                            <CoverImageField
+                                value={form.cover_image}
+                                alt={form.cover_image_alt}
+                                onChange={(url) => setForm((f) => ({ ...f, cover_image: url }))}
+                                onAltChange={(alt) => setForm((f) => ({ ...f, cover_image_alt: alt }))}
+                            />
                         </SidebarSection>
 
                         <div>

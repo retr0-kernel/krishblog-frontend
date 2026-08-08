@@ -28,8 +28,8 @@ export default async function HomePage() {
   return (
       <>
         {featured && <Hero post={featured} />}
-        <div className="max-w-6xl mx-auto px-6 py-16">
-          <div className="flex items-center gap-4 mb-12">
+        <div className="max-w-6xl mx-auto px-6 pt-10 pb-16">
+          <div className="flex items-center gap-4 mb-10">
             <span className="text-xs font-sans font-semibold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Latest</span>
             <div className="flex-1 h-px bg-[hsl(var(--border))]" />
           </div>

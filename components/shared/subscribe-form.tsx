@@ -34,7 +34,7 @@ export function SubscribeForm({ compact = false, className = "" }: SubscribeForm
                 setMessage(data.error?.message ?? "Something went wrong. Try again.");
             } else {
                 setState("success");
-                setMessage("Check your inbox to confirm your subscription.");
+                setMessage(data.data?.message ?? "Check your inbox to confirm your subscription.");
                 setEmail("");
                 setName("");
             }

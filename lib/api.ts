@@ -233,6 +233,18 @@ export async function adminGetSubscriberStats(token: string): Promise<{ total: n
   }
 }
 
+export async function adminNotifySubscribers(
+    token: string,
+    body: { post_title: string; post_slug: string; post_summary: string },
+): Promise<string> {
+  const r = await apiFetch<{ message: string }>("/v1/admin/subscribers/notify", {
+    method: "POST",
+    body: JSON.stringify(body),
+    token,
+  });
+  return r.data?.message ?? "Notifications sent.";
+}
+
 // ── Comments ──────────────────────────────────────────────────────────────────
 
 export async function getComments(postId: string): Promise<Comment[]> {
