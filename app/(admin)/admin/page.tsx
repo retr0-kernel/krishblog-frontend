@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { FileText, Eye, Users, TrendingUp, Plus, Mail, ArrowRight } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { adminGetPosts, adminGetOverview, adminGetSubscriberStats } from "@/lib/api";
-import type { OverviewStats, Post } from "@/types";
+import type { OverviewStats, Post, SubscriberStats } from "@/types";
 import { formatDate } from "@/lib/utils";
 
 const card = (i: number) => ({
@@ -18,7 +18,7 @@ export default function AdminDashboard() {
     const { token, loading } = useAuth(); //auth
     const [stats, setStats] = useState<OverviewStats | null>(null);
     const [recentPosts, setRecentPosts] = useState<Post[]>([]);
-    const [subStats, setSubStats] = useState<{ total: number; confirmed: number } | null>(null);
+    const [subStats, setSubStats] = useState<SubscriberStats | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -61,7 +61,9 @@ export default function AdminDashboard() {
             value: subStats != null ? `${subStats.confirmed}` : "—",
             icon: Mail,
             color: "text-purple-500",
-            sub: subStats != null ? `${subStats.total} total` : undefined,
+            sub: subStats != null
+                ? `${subStats.pending} pending · ${subStats.total} total`
+                : undefined,
         },
     ];
 

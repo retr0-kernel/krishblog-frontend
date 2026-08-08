@@ -336,12 +336,19 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
 
             if (isFirstPublish && savedPost.status === "published") {
                 try {
-                    await adminNotifySubscribers(token, {
+                    const notify = await adminNotifySubscribers(token, {
+                        post_id: savedPost.id,
                         post_title: savedPost.title,
                         post_slug: savedPost.slug,
                         post_summary: savedPost.excerpt ?? form.excerpt,
                     });
-                    setSaveMessage("Published — subscribers notified");
+                    if (notify.total_confirmed === 0) {
+                        setSaveMessage("Published — no confirmed subscribers yet");
+                    } else if (notify.failed_count > 0) {
+                        setSaveMessage(`Published — ${notify.sent_count}/${notify.total_confirmed} subscribers reached`);
+                    } else {
+                        setSaveMessage(`Published — ${notify.sent_count}/${notify.total_confirmed} subscribers notified`);
+                    }
                 } catch {
                     setSaveMessage("Published — notification failed");
                 }

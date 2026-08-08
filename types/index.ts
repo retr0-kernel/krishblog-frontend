@@ -151,3 +151,30 @@ export interface Comment {
   updated_at: string;
 }
 
+// ── Subscribers ───────────────────────────────────────────────────────────────
+
+export interface PostNotification {
+  id: string;
+  post_id: string;
+  post_slug: string;
+  post_title: string;
+  total_confirmed: number;
+  sent_count: number;
+  failed_count: number;
+  notified_at: string;
+}
+
+export interface SubscriberStats {
+  total: number;
+  confirmed: number;
+  pending: number;
+  recent_notifications: PostNotification[];
+}
+
+export interface NotifyResult {
+  message: string;
+  total_confirmed: number;
+  sent_count: number;
+  failed_count: number;
+}
+

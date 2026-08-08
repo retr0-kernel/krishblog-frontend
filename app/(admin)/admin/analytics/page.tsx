@@ -5,10 +5,11 @@ import {
     LineChart, Line,
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
-import { Eye, Users, TrendingUp, Clock } from "lucide-react";
+import { Eye, Users, TrendingUp, Clock, Mail } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { adminGetOverview } from "@/lib/api";
-import type { OverviewStats } from "@/types";
+import { adminGetOverview, adminGetSubscriberStats } from "@/lib/api";
+import type { OverviewStats, SubscriberStats } from "@/types";
+import { formatDate } from "@/lib/utils";
 
 const DAYS_OPTIONS = [7, 14, 30, 90];
 const COLORS = ["hsl(14 80% 52%)", "hsl(220 80% 55%)", "hsl(142 71% 45%)", "hsl(260 60% 55%)", "hsl(40 80% 50%)"];
@@ -19,13 +20,20 @@ export default function AdminAnalyticsPage() {
     const { token } = useAuth();
     const [days, setDays] = useState(30);
     const [stats, setStats] = useState<OverviewStats | null>(null);
+    const [subStats, setSubStats] = useState<SubscriberStats | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!token) return;
         setLoading(true);
-        adminGetOverview(token, days)
-            .then(setStats)
+        Promise.all([
+            adminGetOverview(token, days),
+            adminGetSubscriberStats(token),
+        ])
+            .then(([overview, subs]) => {
+                setStats(overview);
+                setSubStats(subs);
+            })
             .catch(() => {})
             .finally(() => setLoading(false));
     }, [token, days]);
@@ -42,7 +50,10 @@ export default function AdminAnalyticsPage() {
         { label: "Unique Visitors",value: stats?.unique_visitors  ?? 0,                                         icon: Users,     color: "text-green-500" },
         { label: "Avg Scroll %",   value: stats ? `${(stats.avg_scroll_pct  ?? 0).toFixed(0)}%` : "0%",         icon: TrendingUp,color: "text-[hsl(var(--accent))]" },
         { label: "Avg Read Time",  value: stats ? `${(stats.avg_read_time_sec ?? 0).toFixed(0)}s` : "0s",        icon: Clock,     color: "text-purple-500" },
+        { label: "Subscribers",    value: subStats?.confirmed ?? 0,                                              icon: Mail,      color: "text-pink-500", sub: subStats ? `${subStats.pending} pending` : undefined },
     ];
+
+    const notifications = subStats?.recent_notifications ?? [];
 
     return (
         <div className="p-8 max-w-5xl mx-auto">
@@ -68,7 +79,7 @@ export default function AdminAnalyticsPage() {
             ) : (
                 <>
                     {/* Metric cards */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                         {metrics.map((m, i) => (
                             <motion.div key={m.label}
                                         initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
@@ -78,6 +89,9 @@ export default function AdminAnalyticsPage() {
                                     <p className="text-xs font-sans text-[hsl(var(--muted-foreground))]">{m.label}</p>
                                 </div>
                                 <p className="text-2xl font-bold font-sans">{typeof m.value === "number" ? fmtNum(m.value) : m.value}</p>
+                                {"sub" in m && m.sub && (
+                                    <p className="text-xs font-sans text-[hsl(var(--muted-foreground))] mt-0.5">{m.sub}</p>
+                                )}
                             </motion.div>
                         ))}
                     </div>
@@ -164,6 +178,46 @@ export default function AdminAnalyticsPage() {
                             )}
                         </motion.div>
                     </div>
+
+                    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}
+                                className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-lg p-5 mb-6">
+                        <h2 className="text-sm font-sans font-semibold mb-1">Email reach (per publish)</h2>
+                        <p className="text-xs font-sans text-[hsl(var(--muted-foreground))] mb-4">
+                            When a post is published, confirmed subscribers are emailed automatically.
+                        </p>
+                        {notifications.length === 0 ? (
+                            <p className="text-sm font-sans text-[hsl(var(--muted-foreground))] text-center py-6">No posts emailed yet</p>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm font-sans">
+                                    <thead>
+                                        <tr className="text-left text-[hsl(var(--muted-foreground))] border-b border-[hsl(var(--border))]">
+                                            <th className="pb-2 pr-4 font-medium">Post</th>
+                                            <th className="pb-2 pr-4 font-medium">Date</th>
+                                            <th className="pb-2 pr-4 font-medium text-right">Reached</th>
+                                            <th className="pb-2 font-medium text-right">Failed</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {notifications.map((n) => (
+                                            <tr key={n.id} className="border-b border-[hsl(var(--border))] last:border-0">
+                                                <td className="py-2.5 pr-4 max-w-[200px] truncate">{n.post_title}</td>
+                                                <td className="py-2.5 pr-4 text-[hsl(var(--muted-foreground))] whitespace-nowrap">
+                                                    {formatDate(n.notified_at)}
+                                                </td>
+                                                <td className="py-2.5 pr-4 text-right font-semibold text-green-600 dark:text-green-400">
+                                                    {n.sent_count}/{n.total_confirmed}
+                                                </td>
+                                                <td className="py-2.5 text-right text-[hsl(var(--muted-foreground))]">
+                                                    {n.failed_count > 0 ? n.failed_count : "—"}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </motion.div>
 
                     <div className="grid lg:grid-cols-2 gap-6">
                         {/* Top referrers */}

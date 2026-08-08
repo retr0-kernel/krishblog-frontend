@@ -1,7 +1,7 @@
 import type {
   ApiResponse, Post, Section,
   LoginRequest, LoginResponse, User,
-  OverviewStats, PostFormData, Comment,
+  OverviewStats, PostFormData, Comment, SubscriberStats, NotifyResult,
 } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
@@ -250,25 +250,25 @@ export async function trackEvent(payload: {
 
 // ── Subscribers ───────────────────────────────────────────────────────────────
 
-export async function adminGetSubscriberStats(token: string): Promise<{ total: number; confirmed: number }> {
+export async function adminGetSubscriberStats(token: string): Promise<SubscriberStats> {
   try {
-    const r = await apiFetch<{ total: number; confirmed: number }>("/v1/admin/subscribers/stats", { token });
-    return r.data ?? { total: 0, confirmed: 0 };
+    const r = await apiFetch<SubscriberStats>("/v1/admin/subscribers/stats", { token });
+    return r.data ?? { total: 0, confirmed: 0, pending: 0, recent_notifications: [] };
   } catch {
-    return { total: 0, confirmed: 0 };
+    return { total: 0, confirmed: 0, pending: 0, recent_notifications: [] };
   }
 }
 
 export async function adminNotifySubscribers(
     token: string,
-    body: { post_title: string; post_slug: string; post_summary: string },
-): Promise<string> {
-  const r = await apiFetch<{ message: string }>("/v1/admin/subscribers/notify", {
+    body: { post_id: string; post_title: string; post_slug: string; post_summary: string },
+): Promise<NotifyResult> {
+  const r = await apiFetch<NotifyResult>("/v1/admin/subscribers/notify", {
     method: "POST",
     body: JSON.stringify(body),
     token,
   });
-  return r.data?.message ?? "Notifications sent.";
+  return r.data ?? { message: "Notifications sent.", total_confirmed: 0, sent_count: 0, failed_count: 0 };
 }
 
 // ── Comments ──────────────────────────────────────────────────────────────────
