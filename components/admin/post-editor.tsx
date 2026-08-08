@@ -13,130 +13,8 @@ import { adminCreatePost, adminUpdatePost, adminUpdatePostStatus, adminGetSectio
 import type { Post, Section } from "@/types";
 import { cn } from "@/lib/utils";
 import { CoverImageField } from "@/components/admin/cover-image-field";
+import { MarkdownContent } from "@/components/reader/markdown-content";
 import { imagesRepoMarkdown } from "@/lib/images-repo";
-
-function MarkdownPreview({ content }: { content: string }) {
-    const lines = content.split("\n");
-    const result: React.ReactElement[] = [];
-    let inList = false;
-    let listItems: string[] = [];
-    let listType: "ul" | "ol" = "ul";
-    let inCodeBlock = false;
-    let codeBlockLines: string[] = [];
-    let codeBlockLang = "";
-
-    const flushList = (index: number) => {
-        if (inList && listItems.length > 0) {
-            const ListTag = listType;
-            result.push(
-                <ListTag key={`list-${index}`} className={listType === "ul" ? "list-disc list-inside" : "list-decimal list-inside"}>
-                    {listItems.map((item, i) => (
-                        <li key={i} dangerouslySetInnerHTML={{ __html: formatInline(item) }} />
-                    ))}
-                </ListTag>
-            );
-            listItems = [];
-            inList = false;
-        }
-    };
-
-    const flushCodeBlock = (index: number) => {
-        if (inCodeBlock && codeBlockLines.length > 0) {
-            result.push(
-                <div key={`code-${index}`} className="my-4">
-                    {codeBlockLang && (
-                        <div className="text-[10px] font-mono text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] px-3 py-1 rounded-t border border-b-0 border-[hsl(var(--border))]">
-                            {codeBlockLang}
-                        </div>
-                    )}
-                    <pre className={cn(
-                        "bg-[hsl(var(--muted))] border border-[hsl(var(--border))] p-4 overflow-x-auto font-mono text-sm text-[hsl(var(--foreground))]",
-                        codeBlockLang ? "rounded-b" : "rounded"
-                    )}>
-                        <code className="text-[hsl(var(--foreground))]">{codeBlockLines.join("\n")}</code>
-                    </pre>
-                </div>
-            );
-            codeBlockLines = [];
-            codeBlockLang = "";
-            inCodeBlock = false;
-        }
-    };
-
-    const formatInline = (text: string) => {
-        return text
-            .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="max-w-full h-auto rounded my-4" />')
-            .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-            .replace(/\*(.+?)\*/g, "<em>$1</em>")
-            .replace(/__(.+?)__/g, "<u>$1</u>")
-            .replace(/`(.+?)`/g, '<code class="bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] px-1 py-0.5 rounded text-sm font-mono">$1</code>')
-            .replace(/\[(.+?)]\((.+?)\)/g, '<a href="$2" class="text-[hsl(var(--accent))] hover:underline">$1</a>');
-    };
-
-    lines.forEach((line, i) => {
-        if (line.startsWith("```")) {
-            if (inCodeBlock) {
-                flushCodeBlock(i);
-            } else {
-                flushList(i);
-                inCodeBlock = true;
-                codeBlockLang = line.slice(3).trim();
-            }
-            return;
-        }
-
-        if (inCodeBlock) {
-            codeBlockLines.push(line);
-            return;
-        }
-
-        if (line.match(/^[-*]\s+(.+)/)) {
-            const match = line.match(/^[-*]\s+(.+)/);
-            if (!inList) { inList = true; listType = "ul"; }
-            if (match) listItems.push(match[1]);
-            return;
-        } else if (line.match(/^\d+\.\s+(.+)/)) {
-            const match = line.match(/^\d+\.\s+(.+)/);
-            if (!inList) { inList = true; listType = "ol"; }
-            if (match) listItems.push(match[1]);
-            return;
-        } else {
-            flushList(i);
-        }
-
-        if (line.startsWith("# ")) {
-            result.push(<h1 key={i} className="text-3xl font-bold mt-8 mb-4">{line.slice(2)}</h1>);
-        } else if (line.startsWith("## ")) {
-            result.push(<h2 key={i} className="text-2xl font-bold mt-6 mb-3">{line.slice(3)}</h2>);
-        } else if (line.startsWith("### ")) {
-            result.push(<h3 key={i} className="text-xl font-bold mt-5 mb-2">{line.slice(4)}</h3>);
-        } else if (line.startsWith("#### ")) {
-            result.push(<h4 key={i} className="text-lg font-bold mt-4 mb-2">{line.slice(5)}</h4>);
-        } else if (line.startsWith("> ")) {
-            result.push(<blockquote key={i} className="border-l-4 border-[hsl(var(--accent))] pl-4 italic">{line.slice(2)}</blockquote>);
-        } else if (line.startsWith("---")) {
-            result.push(<hr key={i} className="my-6 border-[hsl(var(--border))]" />);
-        } else if (line === "") {
-            result.push(<br key={i} />);
-        } else if (line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)) {
-            const match = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-            if (match) {
-                result.push(
-                    <div key={i} className="my-6">
-                        <img src={match[2]} alt={match[1]} className="max-w-full h-auto rounded" />
-                    </div>
-                );
-            }
-        } else {
-            result.push(<p key={i} dangerouslySetInnerHTML={{ __html: formatInline(line) }} />);
-        }
-    });
-
-    flushList(lines.length);
-    flushCodeBlock(lines.length);
-
-    return <div className="prose-editorial max-w-none">{result}</div>;
-}
 
 interface PostEditorProps {
     post?: Post;
@@ -297,8 +175,8 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
             content: form.content,
             section_id: form.section_id || undefined,
             is_featured: form.is_featured,
-            cover_image: form.cover_image || undefined,
-            cover_image_alt: form.cover_image_alt || undefined,
+            cover_image: form.cover_image,
+            cover_image_alt: form.cover_image_alt,
             meta_title: form.meta_title || undefined,
             meta_desc: form.meta_desc || undefined,
         };
@@ -335,23 +213,27 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
             }
 
             if (isFirstPublish && savedPost.status === "published") {
-                try {
-                    const notify = await adminNotifySubscribers(token, {
-                        post_id: savedPost.id,
-                        post_title: savedPost.title,
-                        post_slug: savedPost.slug,
-                        post_summary: savedPost.excerpt ?? form.excerpt,
+                setSaveMessage("Published — queuing subscriber emails…");
+                void adminNotifySubscribers(token, {
+                    post_id: savedPost.id,
+                    post_title: savedPost.title,
+                    post_slug: savedPost.slug,
+                    post_summary: savedPost.excerpt ?? form.excerpt,
+                })
+                    .then((notify) => {
+                        if (notify.total_confirmed === 0) {
+                            setSaveMessage("Published — no confirmed subscribers yet");
+                        } else if (notify.queued) {
+                            setSaveMessage(`Published — notifying ${notify.total_confirmed} subscriber${notify.total_confirmed === 1 ? "" : "s"}`);
+                        } else if (notify.failed_count > 0) {
+                            setSaveMessage(`Published — ${notify.sent_count}/${notify.total_confirmed} subscribers reached`);
+                        } else {
+                            setSaveMessage(`Published — ${notify.sent_count}/${notify.total_confirmed} subscribers notified`);
+                        }
+                    })
+                    .catch(() => {
+                        setSaveMessage("Published — notification failed");
                     });
-                    if (notify.total_confirmed === 0) {
-                        setSaveMessage("Published — no confirmed subscribers yet");
-                    } else if (notify.failed_count > 0) {
-                        setSaveMessage(`Published — ${notify.sent_count}/${notify.total_confirmed} subscribers reached`);
-                    } else {
-                        setSaveMessage(`Published — ${notify.sent_count}/${notify.total_confirmed} subscribers notified`);
-                    }
-                } catch {
-                    setSaveMessage("Published — notification failed");
-                }
             } else if (effectiveStatus === "published" && savedPost.status === "published") {
                 setSaveMessage(previousStatus === "archived" ? "Republished" : "Saved");
             } else if (effectiveStatus === "archived") {
@@ -714,7 +596,7 @@ export function PostEditor({ post: initialPost }: PostEditorProps) {
                         <AnimatePresence mode="wait">
                             {preview ? (
                                 <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                    <MarkdownPreview content={form.content} />
+                                    <MarkdownContent content={form.content} className="prose-editorial max-w-none" />
                                 </motion.div>
                             ) : (
                                 <motion.div key="editor" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

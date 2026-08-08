@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import { Copy, Check } from "lucide-react";
+import { normalizeLanguage } from "@/lib/markdown/language";
 
 const SyntaxHighlighter = dynamic(
   () => import("./_syntax-highlighter"),
@@ -19,7 +20,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
   const { resolvedTheme } = useTheme();
   const [copied, setCopied] = useState(false);
   const isDark = resolvedTheme === "dark";
-  const displayLang = language || "text";
+  const displayLang = normalizeLanguage(language);
   const lineCount = code.split("\n").length;
 
   const handleCopy = useCallback(async () => {

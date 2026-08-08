@@ -173,6 +173,7 @@ export interface SubscriberStats {
 
 export interface NotifyResult {
   message: string;
+  queued?: boolean;
   total_confirmed: number;
   sent_count: number;
   failed_count: number;

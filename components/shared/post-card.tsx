@@ -1,9 +1,9 @@
 "use client";
 import Link from "next/link";
-import Image from "next/image";
 import { motion } from "framer-motion";
 import { formatDate } from "@/lib/utils";
 import type { Post } from "@/types";
+import { PostCover } from "@/components/shared/post-cover";
 
 interface PostCardProps {
   post: Post;
@@ -20,21 +20,21 @@ export function PostCard({ post, index = 0, featured = false }: PostCardProps) {
           className={featured ? "group" : "group border-b border-[hsl(var(--border))] pb-8"}
       >
         <Link href={`/post/${post.slug}`} className="block">
-          {post.cover_image && (
-              <div className={`relative overflow-hidden mb-4 ${featured ? "aspect-[16/9]" : "aspect-[3/2]"}`}>
-                <Image
-                    src={post.cover_image}
-                    alt={post.cover_image_alt ?? post.title}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                />
-                {post.is_featured && (
-                    <span className="absolute top-3 left-3 bg-[hsl(var(--accent))] text-white text-xs font-sans font-medium px-2 py-0.5">
+          <div className="relative mb-4">
+            <PostCover
+              src={post.cover_image}
+              alt={post.cover_image_alt ?? post.title}
+              title={post.title}
+              aspect={featured ? "aspect-[16/9]" : "aspect-[3/2]"}
+              imageClassName="transition-transform duration-500 group-hover:scale-105"
+              sizes={featured ? "(max-width: 768px) 100vw, 50vw" : "(max-width: 768px) 100vw, 33vw"}
+            />
+            {post.is_featured && (
+              <span className="absolute top-3 left-3 bg-[hsl(var(--accent))] text-white text-xs font-sans font-medium px-2 py-0.5">
                 Featured
               </span>
-                )}
-              </div>
-          )}
+            )}
+          </div>
 
           <div className="space-y-2">
             {post.section_slug && (

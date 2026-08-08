@@ -74,7 +74,8 @@ export function CoverImageField({ value, alt, onChange, onAltChange }: CoverImag
                     className="w-full h-8 px-2 text-xs font-mono bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded focus:outline-none focus:border-[hsl(var(--accent))] transition-colors"
                 />
                 <p className="mt-1 text-[10px] font-sans text-[hsl(var(--muted-foreground))] leading-relaxed">
-                    Relative path from repo root, e.g. <code className="font-mono">diagrams/arch.png</code>
+                    Recommended: <strong>1600×900</strong> (16:9) or <strong>1200×750</strong> (16:10). JPG/WebP, under 500&nbsp;KB.
+                    Path example: <code className="font-mono">covers/my-post.jpg</code>
                 </p>
             </div>
 

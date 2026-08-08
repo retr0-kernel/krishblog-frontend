@@ -1,10 +1,10 @@
 "use client";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { Post } from "@/types";
+import { PostCover } from "@/components/shared/post-cover";
 
 interface HeroProps {
     post: Post;
@@ -65,26 +65,17 @@ export function Hero({ post }: HeroProps) {
 
                     <Link
                         href={`/post/${post.slug}`}
-                        className="order-1 lg:order-2 relative aspect-[16/10] overflow-hidden rounded-sm border border-[hsl(var(--border))] bg-[hsl(var(--secondary))]"
+                        className="order-1 lg:order-2 block rounded-sm border border-[hsl(var(--border))] overflow-hidden"
                     >
-                        {post.cover_image ? (
-                            <Image
-                                src={post.cover_image}
-                                alt={post.cover_image_alt ?? post.title}
-                                fill
-                                className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-                                priority
-                                sizes="(max-width: 1024px) 100vw, 560px"
-                            />
-                        ) : (
-                            <div
-                                className="absolute inset-0 opacity-[0.07]"
-                                style={{
-                                    backgroundImage: "radial-gradient(circle at 1px 1px, hsl(var(--foreground)) 1px, transparent 0)",
-                                    backgroundSize: "32px 32px",
-                                }}
-                            />
-                        )}
+                        <PostCover
+                            src={post.cover_image}
+                            alt={post.cover_image_alt ?? post.title}
+                            title={post.title}
+                            aspect="aspect-[16/10]"
+                            imageClassName="transition-transform duration-500 group-hover:scale-[1.02]"
+                            priority
+                            sizes="(max-width: 1024px) 100vw, 560px"
+                        />
                     </Link>
                 </motion.article>
             </div>

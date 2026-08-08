@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import { getPost } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
@@ -10,6 +9,7 @@ import { ShareButtons } from "@/components/reader/share-buttons";
 import { ScrollTracker } from "@/components/reader/scroll-tracker";
 import { PostContent } from "@/components/reader/post-content";
 import { Comments } from "@/components/reader/comments";
+import { PostCover } from "@/components/shared/post-cover";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -88,13 +88,17 @@ export default async function PostPage({ params }: Props) {
           </div>
         </div>
 
-        {post.cover_image && (
-          <div className="max-w-5xl mx-auto px-6 mb-12">
-            <div className="relative aspect-[21/9] overflow-hidden rounded-sm">
-              <Image src={post.cover_image} alt={post.cover_image_alt ?? post.title} fill className="object-cover" priority />
-            </div>
-          </div>
-        )}
+        <div className="max-w-5xl mx-auto px-6 mb-12">
+          <PostCover
+            src={post.cover_image}
+            alt={post.cover_image_alt ?? post.title}
+            title={post.title}
+            aspect="aspect-[16/10]"
+            className="rounded-sm border border-[hsl(var(--border))]"
+            priority
+            sizes="(max-width: 1024px) 100vw, 1024px"
+          />
+        </div>
 
         <div className="max-w-2xl mx-auto px-6 pb-16">
           {post.content ? (

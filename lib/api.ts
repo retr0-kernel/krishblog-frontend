@@ -268,7 +268,7 @@ export async function adminNotifySubscribers(
     body: JSON.stringify(body),
     token,
   });
-  return r.data ?? { message: "Notifications sent.", total_confirmed: 0, sent_count: 0, failed_count: 0 };
+  return r.data ?? { message: "Notifications sent.", queued: false, total_confirmed: 0, sent_count: 0, failed_count: 0 };
 }
 
 // ── Comments ──────────────────────────────────────────────────────────────────
