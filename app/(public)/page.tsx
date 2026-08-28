@@ -1,15 +1,39 @@
 import type { Metadata } from "next";
 import type { Post } from "@/types";
 import { getPosts } from "@/lib/api";
-import { Hero } from "@/components/home/hero";
-import { PostCard } from "@/components/shared/post-card";
+import { PortfolioPage } from "@/components/portfolio/portfolio-page";
+import { portfolio } from "@/content/portfolio";
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.krishsrivastava.com";
 
 export const metadata: Metadata = {
-  title: "Home",
-  description: "A personal chronicle of ideas, code, and stories.",
+  title: "Krish Srivastava — Software Engineer",
+  description: portfolio.hero.tagline,
+  openGraph: {
+    title: "Krish Srivastava — Software Engineer",
+    description: portfolio.hero.tagline,
+    url: siteUrl,
+    type: "profile",
+  },
 };
 
 export const revalidate = 60;
+
+function portfolioJsonLd() {
+  const { hero } = portfolio;
+  return {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    mainEntity: {
+      "@type": "Person",
+      name: hero.name,
+      jobTitle: hero.title,
+      email: hero.email,
+      url: siteUrl,
+      sameAs: [hero.socials.github, hero.socials.linkedin, hero.socials.twitter],
+    },
+  };
+}
 
 export default async function HomePage() {
   let allPosts: Post[] = [];
@@ -18,31 +42,15 @@ export default async function HomePage() {
     allPosts = data?.posts ?? [];
   } catch { /* show empty state */ }
 
-  const featured = allPosts.length > 0
-      ? (allPosts.find((p) => p.is_featured) ?? allPosts[0])
-      : null;
-  const rest = featured
-      ? allPosts.filter((p) => p.id !== featured.id)
-      : allPosts;
+  const latestPost = allPosts.length > 0 ? allPosts[0] : null;
 
   return (
       <>
-        {featured && <Hero post={featured} />}
-        <div className="max-w-6xl mx-auto px-6 pt-10 pb-16">
-          <div className="flex items-center gap-4 mb-10">
-            <span className="text-xs font-sans font-semibold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Latest</span>
-            <div className="flex-1 h-px bg-[hsl(var(--border))]" />
-          </div>
-          {rest.length === 0 && (
-              <div className="text-center py-24 text-[hsl(var(--muted-foreground))] font-sans">
-                <p className="text-4xl mb-4">✦</p>
-                <p>No posts yet. Check back soon.</p>
-              </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            {rest.map((post, i) => <PostCard key={post.id} post={post} index={i} />)}
-          </div>
-        </div>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(portfolioJsonLd()) }}
+        />
+        <PortfolioPage posts={allPosts} latestPost={latestPost} />
       </>
   );
 }
