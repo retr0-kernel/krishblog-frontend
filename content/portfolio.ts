@@ -54,10 +54,11 @@ export const portfolio = {
     title: "Software Development Engineer I",
     company: "PhysicsWallah",
     tagline:
-      "Backend-focused engineer building platforms, distributed systems, and developer tooling. I write about what I ship on this site.",
+      "Building PhysicsWallah’s Internal Developer Platform — onboarding, workflows, reliability, and tooling for engineers at scale.",
     email: "krish22092003@gmail.com",
     phone: "+91-807-6001-830",
     resumeUrl: "/resume.pdf",
+    resumeDownloadName: "Krish-Srivastava-Resume.pdf",
     photo: "/photo.png",
     socials: {
       github: "https://github.com/retr0-kernel",
@@ -67,10 +68,11 @@ export const portfolio = {
   },
   about: {
     paragraphs: [
-      "I'm a software engineer focused on backend systems, internal platforms, and the craft of code that other people can extend without frustration.",
-      "At PhysicsWallah I work on an Internal Developer Platform — service onboarding, GitLab integrations, Kafka pipelines, RBAC, and self-service workflows that help teams ship faster.",
-      "I care about distributed systems, observability, load testing at scale, and turning operational pain into reusable tooling. This blog is where I think out loud about what I build.",
-      "Outside of work you'll find me reading, walking without a destination, or contributing to open source in the Go ecosystem.",
+      "I'm a software engineer focused on backend systems, internal platforms, and developer experience.",
+      "At PhysicsWallah I work on the Internal Developer Platform in Go, GraphQL, and PostgreSQL — service onboarding, GitLab and Kafka integrations, RBAC, and self-service workflows so product teams can ship without platform bottlenecks.",
+      "Recent work includes a modular workflow engine for platform ops, migrating load testing from JMeter to k6 with Jenkins automation for Vishwas Diwas scale, a MongoDB → Aerospike migration POC, and consolidating legacy APIs into dedicated microservices.",
+      "I've also built AI-assisted incident investigation (Zenduty, Prometheus, Elastic APM, Kubernetes, RAG over Confluence, OpenAI SDK) and internal Go libraries such as a k6 → Postman converter, with plans to open-source more of this tooling.",
+      "Outside of work I contribute upstream in Go (redis/go-redis, hashicorp/go-set) and write on this blog about what I build.",
     ],
   },
   experience: [
@@ -80,12 +82,12 @@ export const portfolio = {
       period: "Mar 2025 – Present",
       location: "On-site",
       highlights: [
-        "Internal Developer Platform (Go, GraphQL, PostgreSQL): service onboarding, GitLab, Kafka, RBAC, self-service workflows",
-        "Modular workflow engine for platform operations",
-        "JMeter → k6 migration; Jenkins load-test automation at Vishwas Diwas scale",
-        "MongoDB → Aerospike migration POC; API consolidation into dedicated microservice",
-        "AI-assisted incident investigation (Zenduty, Prometheus, Elastic APM, K8s, RAG over Confluence, OpenAI SDK)",
-        "Internal Go libraries (k6 → Postman converter; planned OSS release)",
+        "Internal Developer Platform (Go, GraphQL, PostgreSQL): service onboarding, GitLab, Kafka, RBAC, and self-service workflows for engineering teams",
+        "Designed and shipped a modular workflow engine for platform operations and automation",
+        "Led JMeter → k6 migration and Jenkins-based load-test pipelines for Vishwas Diwas traffic scale",
+        "MongoDB → Aerospike migration POC; consolidated scattered APIs into a dedicated microservice",
+        "AI-assisted incident investigation integrating Zenduty, Prometheus, Elastic APM, Kubernetes, RAG over Confluence, and the OpenAI SDK",
+        "Authored internal Go libraries (k6 → Postman converter; additional tooling planned for OSS release)",
       ],
     },
   ] satisfies ExperienceEntry[],

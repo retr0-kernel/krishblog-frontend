@@ -79,7 +79,7 @@ export function PortfolioHero({ latestPost }: { latestPost?: Post | null }) {
               </a>
               <a
                 href={hero.resumeUrl}
-                download
+                download={hero.resumeDownloadName}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-[hsl(var(--border))] text-sm font-sans font-medium hover:border-[hsl(var(--accent))] hover:text-[hsl(var(--accent))] transition-colors"
               >
                 <Download className="h-4 w-4" />

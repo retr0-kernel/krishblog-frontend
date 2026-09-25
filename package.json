@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "sync-resume": "cp Resume.pdf public/resume.pdf",
+    "dev": "npm run sync-resume && next dev",
+    "build": "npm run sync-resume && next build",
     "start": "next start",
     "lint": "eslint"
   },

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { SubscribeForm } from "@/components/shared/subscribe-form";
+import { portfolio } from "@/content/portfolio";
 
 export function Footer() {
+  const { resumeUrl, resumeDownloadName } = portfolio.hero;
   return (
       <footer className="border-t border-[hsl(var(--border))] mt-0">
         <div className="max-w-6xl mx-auto px-6 py-16">
@@ -26,8 +28,8 @@ export function Footer() {
                 <Link href="/search" className="hover:text-[hsl(var(--accent))] transition-colors">Search</Link>
                 <Link href="/rss" className="hover:text-[hsl(var(--accent))] transition-colors">RSS</Link>
                 <a
-                  href="/resume.pdf"
-                  download
+                  href={resumeUrl}
+                  download={resumeDownloadName}
                   className="hover:text-[hsl(var(--accent))] transition-colors"
                 >
                   Download resume
@@ -50,7 +52,7 @@ export function Footer() {
             <p>© {new Date().getFullYear()} Krish. All rights reserved.</p>
             <nav className="flex gap-4">
               <Link href="/#about" className="hover:text-[hsl(var(--foreground))] transition-colors">About</Link>
-              <a href="/resume.pdf" download className="hover:text-[hsl(var(--foreground))] transition-colors">Resume</a>
+              <a href={resumeUrl} download={resumeDownloadName} className="hover:text-[hsl(var(--foreground))] transition-colors">Resume</a>
               <Link href="/rss" className="hover:text-[hsl(var(--foreground))] transition-colors">RSS</Link>
             </nav>
           </div>
